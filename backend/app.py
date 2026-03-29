@@ -17,13 +17,24 @@ nltk.data.path.append(nltk_data_path)
 # Download required NLTK data to /tmp
 try:
     nltk.data.find('tokenizers/punkt', paths=[nltk_data_path])
-except LookupError:
-    nltk.download('punkt', download_dir=nltk_data_path)
+    print("Found punkt")
+except (LookupError, Exception):
+    print("Downloading punkt...")
+    nltk.download('punkt', download_dir=nltk_data_path, quiet=True)
 
 try:
     nltk.data.find('taggers/averaged_perceptron_tagger', paths=[nltk_data_path])
-except LookupError:
-    nltk.download('averaged_perceptron_tagger', download_dir=nltk_data_path)
+    print("Found tagger")
+except (LookupError, Exception):
+    print("Downloading tagger...")
+    nltk.download('averaged_perceptron_tagger', download_dir=nltk_data_path, quiet=True)
+
+# Test TextBlob at startup
+try:
+    TextBlob("test").sentiment
+    print("TextBlob ready")
+except Exception as e:
+    print(f"TextBlob Error: {e}")
 
 # Setup directories
 base_dir = os.path.abspath(os.path.dirname(__file__))
