@@ -3,248 +3,195 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EMO - 情绪燃料站</title>
+    <title>EMO.SOUL - 情绪疗愈空间</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;700&family=Space+Grotesk:wght@300;500&display=swap');
         
         body {
-            font-family: 'Space Grotesk', sans-serif;
-            background: radial-gradient(circle at top right, #1a1a2e, #16213e, #0f3460);
-            color: #e94560;
+            font-family: 'Space Grotesk', 'Noto Serif SC', serif;
+            background: #000;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .video-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover;
+            z-index: -2;
+            opacity: 0.4;
+            transition: opacity 2s ease;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at center, transparent, rgba(0,0,0,0.8));
+            z-index: -1;
         }
 
         .glass {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(12px);
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .glow-blue { box-shadow: 0 0 20px rgba(0, 119, 255, 0.3); }
-        .glow-pink { box-shadow: 0 0 20px rgba(233, 69, 96, 0.3); }
-
-        @keyframes pulse-energy {
-            0% { transform: scale(1); opacity: 0.5; }
-            50% { transform: scale(1.1); opacity: 1; }
-            100% { transform: scale(1); opacity: 0.5; }
+        .chat-bubble {
+            max-width: 80%;
+            padding: 1rem 1.5rem;
+            border-radius: 20px;
+            margin-bottom: 1rem;
+            animation: fadeIn 0.5s ease forwards;
         }
 
-        .energy-node {
-            animation: pulse-energy 2s infinite ease-in-out;
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
-        .gradient-text {
-            background: linear-gradient(to right, #e94560, #0f3460);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+        #weather-canvas {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 10;
         }
 
-        /* Hide scrollbar */
-        ::-webkit-scrollbar { display: none; }
+        .music-visualizer {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            height: 40px;
+        }
+
+        .vis-bar {
+            width: 3px;
+            background: #fff;
+            border-radius: 10px;
+            transition: height 0.1s ease;
+        }
     </style>
 </head>
-<body class="min-h-screen text-slate-200 overflow-x-hidden">
-    <!-- Navigation -->
-    <nav class="fixed top-0 w-full z-50 px-6 py-4 flex justify-between items-center glass border-b border-white/10">
-        <div class="flex items-center gap-2">
-            <i data-lucide="zap" class="text-pink-500 fill-pink-500 w-6 h-6"></i>
-            <span class="text-xl font-bold tracking-tighter text-white">EMO.FUEL</span>
+<body class="min-h-screen">
+    <!-- Weather & Visuals -->
+    <canvas id="weather-canvas"></canvas>
+    <video id="bg-video" class="video-bg" autoplay muted loop playsinline></video>
+    <div class="overlay"></div>
+
+    <!-- Nav -->
+    <nav class="fixed top-0 w-full p-6 flex justify-between items-center z-50">
+        <div class="flex items-center gap-2 opacity-80">
+            <i data-lucide="wind" class="w-5 h-5"></i>
+            <span class="text-sm tracking-widest uppercase">EMO.SOUL</span>
         </div>
-        <div class="flex gap-8 text-sm font-medium">
-            <button onclick="showSection('diary')" class="nav-link hover:text-pink-500 transition-colors flex items-center gap-2">
-                <i data-lucide="pen-tool" class="w-4 h-4"></i> 日记
+        <div class="flex items-center gap-6">
+            <button onclick="toggleMute()" class="opacity-50 hover:opacity-100 transition-opacity">
+                <i id="mute-icon" data-lucide="volume-2" class="w-5 h-5"></i>
             </button>
-            <button onclick="showSection('market')" class="nav-link hover:text-pink-500 transition-colors flex items-center gap-2">
-                <i data-lucide="shopping-cart" class="w-4 h-4"></i> 市场
-            </button>
-            <button onclick="showSection('vault')" class="nav-link hover:text-pink-500 transition-colors flex items-center gap-2">
-                <i data-lucide="database" class="w-4 h-4"></i> 个人库
-            </button>
-        </div>
-        <div class="flex items-center gap-4">
-            <div class="px-3 py-1 rounded-full bg-pink-500/10 border border-pink-500/20 text-xs text-pink-500 flex items-center gap-2">
-                <div class="w-2 h-2 rounded-full bg-pink-500 energy-node"></div>
-                1.2k ENERGY
+            <div id="status-tag" class="text-[10px] px-2 py-1 border border-white/20 rounded-full opacity-50 uppercase tracking-tighter">
+                Ready
             </div>
         </div>
     </nav>
 
-    <!-- Main Content -->
-    <main class="pt-24 pb-12 px-6 max-w-6xl mx-auto">
+    <!-- Main Content: Chat Interface -->
+    <main class="h-screen flex flex-col justify-end px-6 pb-24 max-w-4xl mx-auto relative z-20">
         
-        <!-- DIARY SECTION -->
-        <section id="diary-section" class="section-content space-y-12">
-            <div class="text-center space-y-4">
-                <h1 class="text-5xl font-bold text-white tracking-tight">将情绪转化为<span class="text-pink-500">燃料</span></h1>
-                <p class="text-slate-400 max-w-xl mx-auto">每一段文字都是一种频率。记录你的日常，生成独一无二的情绪音乐 Token。</p>
+        <div id="chat-history" class="overflow-y-auto mb-8 pr-4 flex flex-col scroll-smooth">
+            <!-- Messages appear here -->
+            <div class="chat-bubble glass self-start text-white/80">
+                欢迎来到你的情绪空间。告诉我，此刻你的内心世界正经历着怎样的波动？
             </div>
+        </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <!-- Editor -->
-                <div class="glass rounded-3xl p-8 space-y-6">
-                    <div class="flex justify-between items-center">
-                        <span class="text-xs font-bold tracking-widest text-slate-500 uppercase">当前心情记录</span>
-                        <span id="char-count" class="text-xs text-slate-600">0 字</span>
-                    </div>
-                    <textarea id="diary-input" 
-                        class="w-full h-64 bg-transparent border-none focus:ring-0 text-xl text-white placeholder-slate-700 resize-none"
-                        placeholder="此刻，你的内心在流淌什么？"></textarea>
-                    
-                    <div class="flex gap-4">
-                        <button id="analyze-btn" class="flex-1 py-4 bg-pink-600 hover:bg-pink-500 text-white rounded-2xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2">
-                            <i data-lucide="sparkles" class="w-5 h-5"></i> 提炼情绪
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Analysis & Preview -->
-                <div id="analysis-panel" class="hidden glass rounded-3xl p-8 space-y-8 border-pink-500/20">
-                    <div class="space-y-4">
-                        <h3 class="text-xs font-bold tracking-widest text-slate-500 uppercase">情绪频谱分析</h3>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="p-4 rounded-2xl bg-white/5 border border-white/10">
-                                <div class="text-xs text-slate-500 mb-1">极性 (Polarity)</div>
-                                <div id="polarity-val" class="text-2xl font-bold text-white">-</div>
-                            </div>
-                            <div class="p-4 rounded-2xl bg-white/5 border border-white/10">
-                                <div class="text-xs text-slate-500 mb-1">主观性 (Subj)</div>
-                                <div id="subjectivity-val" class="text-2xl font-bold text-white">-</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="space-y-4">
-                        <div class="flex justify-between items-center">
-                            <h3 class="text-xs font-bold tracking-widest text-slate-500 uppercase">音乐指纹预览</h3>
-                            <div id="bpm-display" class="text-xs text-pink-500 font-mono">-- BPM</div>
-                        </div>
-                        <div class="flex items-center gap-6">
-                            <button id="play-preview" class="w-16 h-16 rounded-full bg-white text-slate-900 flex items-center justify-center hover:scale-110 transition-transform active:scale-95">
-                                <i data-lucide="play" class="w-6 h-6 fill-current"></i>
-                            </button>
-                            <div id="wave-container" class="flex-1 h-12 flex items-center gap-1">
-                                <!-- Bars added via JS -->
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="pt-4 border-t border-white/10 space-y-4">
-                        <div class="flex justify-between items-end">
-                            <div>
-                                <div class="text-xs text-slate-500">预估价值</div>
-                                <div id="estimated-price" class="text-xl font-bold text-white">0.00 EMO</div>
-                            </div>
-                            <button id="mint-btn" class="px-8 py-3 bg-white text-slate-900 rounded-xl font-bold hover:bg-slate-200 transition-colors">
-                                铸造 Token
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- MARKET SECTION -->
-        <section id="market-section" class="section-content hidden space-y-8">
-            <div class="flex justify-between items-end">
-                <div>
-                    <h2 class="text-3xl font-bold text-white">情绪交易市场</h2>
-                    <p class="text-slate-400">发现他人的情绪共鸣，收藏独特的频率。</p>
-                </div>
-                <div class="flex gap-2">
-                    <button class="px-4 py-2 glass rounded-lg text-xs">最新</button>
-                    <button class="px-4 py-2 glass rounded-lg text-xs">最高价</button>
-                </div>
-            </div>
+        <div class="relative group">
+            <textarea id="user-input" 
+                class="w-full bg-white/5 border border-white/10 rounded-2xl p-6 pr-24 text-lg focus:ring-1 focus:ring-white/20 focus:outline-none placeholder-white/20 resize-none transition-all glass"
+                placeholder="在此输入你的感悟..." rows="2"></textarea>
             
-            <div id="market-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- Cards added via JS -->
+            <div class="absolute right-4 bottom-4 flex items-center gap-4">
+                <div class="music-visualizer opacity-0 transition-opacity duration-1000" id="visualizer">
+                    <!-- Bars added by JS -->
+                </div>
+                <button id="send-btn" class="w-12 h-12 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 transition-transform active:scale-95 shadow-xl">
+                    <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                </button>
             </div>
-        </section>
-
-        <!-- VAULT SECTION -->
-        <section id="vault-section" class="section-content hidden space-y-8">
-            <h2 class="text-3xl font-bold text-white">个人情绪金库</h2>
-            <div id="vault-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- Cards added via JS -->
-            </div>
-        </section>
-
+        </div>
     </main>
 
-    <!-- UI Overlay for Notifications -->
-    <div id="toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 px-6 py-3 glass rounded-full text-sm border-pink-500/50 hidden z-[100]">
-        通知内容
+    <!-- Dashboard for Tokens -->
+    <div id="token-card" class="fixed top-24 right-6 w-64 glass rounded-3xl p-6 hidden translate-x-72 transition-transform duration-700 z-30">
+        <div class="flex justify-between items-start mb-6">
+            <span class="text-[10px] uppercase tracking-widest text-white/40">Emotion Token</span>
+            <i data-lucide="shield-check" class="w-4 h-4 text-white/40"></i>
+        </div>
+        <div class="space-y-4">
+            <div class="text-2xl font-bold tracking-tighter" id="token-price">0.02 EMO</div>
+            <div class="text-[10px] font-mono text-white/30 truncate" id="token-hash">#00000000</div>
+            <button id="mint-btn" class="w-full py-3 bg-white text-black rounded-xl text-xs font-bold hover:bg-white/90 transition-all">
+                铸造为 NFT
+            </button>
+        </div>
     </div>
 
     <script>
-        // Initialize Lucide
         lucide.createIcons();
 
-        // State Management
-        let currentSection = 'diary';
-        let currentParams = null;
+        // Constants
+        const VIDEO_SOURCES = {
+            bright: 'https://cdn.pixabay.com/video/2021/04/12/70875-536411514_large.mp4',
+            peaceful: 'https://cdn.pixabay.com/video/2023/10/24/186355-877964121_large.mp4',
+            melancholic: 'https://cdn.pixabay.com/video/2022/10/25/136450-764357731_large.mp4',
+            default: 'https://cdn.pixabay.com/video/2023/10/24/186355-877964121_large.mp4'
+        };
+
+        // State
+        let isMuted = false;
+        let synth, pad, reverb;
         let isPlaying = false;
-        let synth, reverb;
+        let weatherType = 'clear';
+        let currentParams = null;
 
-        // API Helper
-        const API_BASE = '/api';
-
+        // Audio Setup
         async function setupAudio() {
             if (synth) return;
             await Tone.start();
             
-            // Ambient Reverb
-            reverb = new Tone.Reverb({
-                decay: 4,
-                preDelay: 0.1,
-                wet: 0.5
-            }).toDestination();
+            reverb = new Tone.Reverb({ decay: 5, wet: 0.6 }).toDestination();
             
-            // Soothing Synth (Soft Keys)
-            synth = new Tone.PolySynth(Tone.Synth, {
+            // Pad Synth for Chords
+            pad = new Tone.PolySynth(Tone.Synth, {
                 oscillator: { type: 'sine' },
-                envelope: {
-                    attack: 0.5,
-                    decay: 0.5,
-                    sustain: 0.8,
-                    release: 2
-                }
+                envelope: { attack: 2, decay: 1, sustain: 0.8, release: 4 }
             }).connect(reverb);
+            pad.volume.value = -25;
+
+            // Lead Synth for Melody
+            synth = new Tone.MonoSynth({
+                oscillator: { type: 'triangle' },
+                envelope: { attack: 0.5, decay: 0.2, sustain: 0.5, release: 1.5 }
+            }).connect(reverb);
+            synth.volume.value = -15;
         }
 
-        // Section Navigation
-        function showSection(name) {
-            document.querySelectorAll('.section-content').forEach(s => s.classList.add('hidden'));
-            document.getElementById(`${name}-section`).classList.remove('hidden');
-            
-            // Update nav styles
-            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('text-pink-500'));
-            
-            if (name === 'market') fetchMarket();
-            if (name === 'vault') fetchVault();
-        }
+        // Chat Interaction
+        const input = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const history = document.getElementById('chat-history');
 
-        // Diary Logic
-        const diaryInput = document.getElementById('diary-input');
-        const analyzeBtn = document.getElementById('analyze-btn');
-        const analysisPanel = document.getElementById('analysis-panel');
+        sendBtn.addEventListener('click', async () => {
+            const text = input.value.trim();
+            if (!text) return;
 
-        diaryInput.addEventListener('input', (e) => {
-            document.getElementById('char-count').innerText = `${e.target.value.length} 字`;
-        });
-
-        analyzeBtn.addEventListener('click', async () => {
-            const text = diaryInput.value;
-            if (!text) return showToast('请输入点什么...');
-
-            analyzeBtn.disabled = true;
-            analyzeBtn.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> 分析中...';
-            lucide.createIcons();
+            // Add user message
+            addMessage(text, 'self-end glass text-white');
+            input.value = '';
 
             try {
-                const res = await fetch(`${API_BASE}/analyze`, {
+                const res = await fetch('/api/analyze', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({text})
@@ -252,206 +199,143 @@
                 const data = await res.json();
                 
                 currentParams = data.music_params;
-                updateAnalysisUI(data);
-                analysisPanel.classList.remove('hidden');
+                handleAIResponse(data);
             } catch (e) {
-                showToast('后端连接失败');
-            } finally {
-                analyzeBtn.disabled = false;
-                analyzeBtn.innerHTML = '<i data-lucide="sparkles" class="w-5 h-5"></i> 提炼情绪';
-                lucide.createIcons();
+                console.error(e);
             }
         });
 
-        function updateAnalysisUI(data) {
-            document.getElementById('polarity-val').innerText = data.polarity.toFixed(2);
-            document.getElementById('subjectivity-val').innerText = data.subjectivity.toFixed(2);
-            document.getElementById('bpm-display').innerText = `${Math.round(data.music_params.tempo)} BPM`;
-            document.getElementById('estimated-price').innerText = `${(0.01 + Math.abs(data.polarity)*0.1).toFixed(3)} EMO`;
-            
-            // Create wave bars
-            const container = document.getElementById('wave-container');
-            container.innerHTML = '';
-            for(let i=0; i<30; i++) {
-                const bar = document.createElement('div');
-                bar.className = 'w-1 bg-white/20 rounded-full transition-all duration-300';
-                bar.style.height = '20%';
-                container.appendChild(bar);
-            }
+        function addMessage(text, classes) {
+            const msg = document.createElement('div');
+            msg.className = `chat-bubble ${classes}`;
+            msg.innerText = text;
+            history.appendChild(msg);
+            history.scrollTop = history.scrollHeight;
         }
 
-        // Audio Preview
-        document.getElementById('play-preview').addEventListener('click', async () => {
-            if (!currentParams) return;
+        async function handleAIResponse(data) {
+            // AI Text
+            setTimeout(() => {
+                addMessage(data.ai_response, 'self-start glass text-white/80 border-l-2 border-white/40');
+            }, 1000);
+
+            // UI Changes
+            document.getElementById('bg-video').src = VIDEO_SOURCES[data.music_params.mode] || VIDEO_SOURCES.default;
+            weatherType = data.music_params.weather;
+            
+            // Token UI
+            const card = document.getElementById('token-card');
+            card.classList.remove('hidden');
+            setTimeout(() => card.style.transform = 'translateX(0)', 100);
+            document.getElementById('token-price').innerText = `${(0.01 + Math.abs(data.polarity)*0.1).toFixed(3)} EMO`;
+            document.getElementById('token-hash').innerText = `#${Math.random().toString(16).slice(2, 10)}`;
+
+            // Start/Update Music
             await setupAudio();
+            playMusic(data.music_params);
+        }
 
-            if (isPlaying) {
-                Tone.Transport.stop();
-                Tone.Transport.cancel();
-                isPlaying = false;
-                document.getElementById('play-preview').innerHTML = '<i data-lucide="play" class="w-6 h-6 fill-current"></i>';
-            } else {
-                const scale = currentParams.scale === 'major' ? 
-                    ['C4', 'E4', 'G4', 'B4', 'D5', 'F5'] : 
-                    ['C4', 'Eb4', 'G4', 'Bb4', 'C5', 'Eb5'];
+        function playMusic(params) {
+            Tone.Transport.stop();
+            Tone.Transport.cancel();
+            
+            Tone.Transport.bpm.value = params.tempo;
+            
+            let chordIdx = 0;
+            const loop = new Tone.Loop(time => {
+                const chord = params.chords[chordIdx % params.chords.length];
+                pad.triggerAttackRelease(chord, '1n', time);
                 
-                Tone.Transport.bpm.value = currentParams.tempo;
+                // Random melody based on chord notes
+                const note = chord[Math.floor(Math.random() * chord.length)];
+                synth.triggerAttackRelease(note, '4n', time + Tone.Time('4n').toSeconds());
                 
-                new Tone.Loop(time => {
-                    const note = scale[Math.floor(Math.random() * scale.length)];
-                    synth.triggerAttackRelease(note, '8n', time);
-                    
-                    // Animate bars
-                    document.querySelectorAll('#wave-container div').forEach(b => {
-                        b.style.height = `${30 + Math.random()*70}%`;
-                        b.style.backgroundColor = '#e94560';
-                    });
-                }, '4n').start(0);
+                chordIdx++;
+                animateVisualizer();
+            }, '1n').start(0);
 
-                Tone.Transport.start();
-                isPlaying = true;
-                document.getElementById('play-preview').innerHTML = '<i data-lucide="pause" class="w-6 h-6 fill-current"></i>';
+            Tone.Transport.start();
+            document.getElementById('visualizer').classList.remove('opacity-0');
+        }
+
+        // Weather System
+        const canvas = document.getElementById('weather-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Particle {
+            constructor() {
+                this.reset();
             }
-            lucide.createIcons();
-        });
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = -20;
+                this.size = weatherType === 'snow' ? Math.random() * 3 + 1 : Math.random() * 1 + 1;
+                this.speed = weatherType === 'snow' ? Math.random() * 1 + 0.5 : Math.random() * 5 + 10;
+                this.opacity = Math.random() * 0.5 + 0.2;
+            }
+            update() {
+                this.y += this.speed;
+                if (weatherType === 'snow') this.x += Math.sin(this.y / 50) * 1;
+                if (this.y > canvas.height) this.reset();
+            }
+            draw() {
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
+                ctx.beginPath();
+                if (weatherType === 'snow') {
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                } else {
+                    ctx.fillRect(this.x, this.y, 1, 15);
+                }
+                ctx.fill();
+            }
+        }
 
-        // Minting
-        document.getElementById('mint-btn').addEventListener('click', async () => {
-            const text = diaryInput.value;
-            if (!text || !currentParams) return;
+        function initWeather() {
+            particles = Array.from({length: 100}, () => new Particle());
+            animate();
+        }
 
-            const res = await fetch(`${API_BASE}/save`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({text, music_params: currentParams})
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (weatherType !== 'clear') {
+                particles.forEach(p => {
+                    p.update();
+                    p.draw();
+                });
+            }
+            requestAnimationFrame(animate);
+        }
+        initWeather();
+
+        // Visualizer
+        const vis = document.getElementById('visualizer');
+        for(let i=0; i<8; i++) {
+            const b = document.createElement('div');
+            b.className = 'vis-bar';
+            b.style.height = '10px';
+            vis.appendChild(b);
+        }
+
+        function animateVisualizer() {
+            const bars = document.querySelectorAll('.vis-bar');
+            bars.forEach(b => {
+                b.style.height = `${Math.random() * 30 + 10}px`;
             });
-            const data = await res.json();
-            
-            if (data.status === 'success') {
-                showToast('Token 铸造成功！已存入个人库');
-                diaryInput.value = '';
-                analysisPanel.classList.add('hidden');
-            }
-        });
+        }
 
-        // Marketplace
-        async function fetchMarket() {
-            const res = await fetch(`${API_BASE}/tokens`);
-            const tokens = await res.json();
-            const grid = document.getElementById('market-grid');
-            grid.innerHTML = tokens.map(t => `
-                <div class="glass rounded-2xl p-6 space-y-4 hover:border-pink-500/50 transition-all group">
-                    <div class="flex justify-between items-start">
-                        <div class="w-10 h-10 rounded-lg bg-pink-500/20 flex items-center justify-center text-pink-500">
-                            <i data-lucide="music"></i>
-                        </div>
-                        <div class="text-right">
-                            <div class="text-[10px] text-slate-500 uppercase tracking-widest">Hash</div>
-                            <div class="text-[10px] font-mono text-slate-400">#${t.token_hash.slice(0, 8)}</div>
-                        </div>
-                    </div>
-                    <div>
-                        <div class="text-sm text-slate-400 line-clamp-2 italic">"${t.music_params.scale} scale melody..."</div>
-                    </div>
-                    <div class="flex justify-between items-center pt-4 border-t border-white/5">
-                        <div>
-                            <div class="text-xs text-slate-500">价格</div>
-                            <div class="font-bold text-white">${t.price} EMO</div>
-                        </div>
-                        <button onclick="buyToken(${t.id})" class="px-4 py-2 bg-white text-slate-900 rounded-lg text-xs font-bold hover:bg-pink-500 hover:text-white transition-all">
-                            购买
-                        </button>
-                    </div>
-                </div>
-            `).join('');
+        function toggleMute() {
+            isMuted = !isMuted;
+            Tone.Destination.mute = isMuted;
+            document.getElementById('mute-icon').setAttribute('data-lucide', isMuted ? 'volume-x' : 'volume-2');
             lucide.createIcons();
-        }
-
-        async function buyToken(id) {
-            const res = await fetch(`${API_BASE}/buy`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({token_id: id, buyer: 'You'})
-            });
-            const data = await res.json();
-            if (data.status === 'purchased') {
-                showToast('购买成功！');
-                fetchMarket();
-            }
-        }
-
-        // Store tokens globally for playback
-        let storedTokens = {};
-
-        async function fetchVault() {
-            const res = await fetch(`${API_BASE}/vault`);
-            const tokens = await res.json();
-            const grid = document.getElementById('vault-grid');
-            if (tokens.length === 0) {
-                grid.innerHTML = '<div class="col-span-full py-20 text-center text-slate-500">金库目前是空的，快去记录一段日记吧！</div>';
-                return;
-            }
-            
-            grid.innerHTML = tokens.map(t => {
-                storedTokens[t.id] = t.music_params;
-                return `
-                <div class="glass rounded-2xl p-6 space-y-4 hover:border-pink-500/50 transition-all">
-                    <div class="flex justify-between items-start">
-                        <div class="w-10 h-10 rounded-lg bg-pink-500/10 flex items-center justify-center text-pink-500">
-                            <i data-lucide="shield-check"></i>
-                        </div>
-                        <div class="text-right">
-                            <div class="text-[10px] text-slate-500 uppercase tracking-widest">${t.timestamp}</div>
-                            <div class="text-[10px] font-mono text-slate-400">#${t.token_hash.slice(0, 8)}</div>
-                        </div>
-                    </div>
-                    <div>
-                        <div class="text-xs text-slate-500 mb-1">所属权: ${t.owner === 'Collector' ? '你' : t.owner}</div>
-                        <div class="text-sm font-medium text-white">${t.music_params.scale.toUpperCase()} 情绪指纹</div>
-                    </div>
-                    <button onclick='playStoredMusic(${t.id})' class="w-full py-2 glass rounded-lg text-xs font-bold hover:bg-white hover:text-slate-900 transition-all flex items-center justify-center gap-2">
-                        <i data-lucide="play" class="w-3 h-3"></i> 播放
-                    </button>
-                </div>
-            `}).join('');
-            lucide.createIcons();
-        }
-
-        async function playStoredMusic(id) {
-            const params = storedTokens[id];
-            if (!params) return;
-            currentParams = params;
-            await setupAudio();
-            
-            // Toggle logic
-            if (isPlaying) {
-                Tone.Transport.stop();
-                Tone.Transport.cancel();
-                isPlaying = false;
-                showToast('已停止播放');
-            } else {
-                const scale = params.scale === 'major' ? 
-                    ['C4', 'E4', 'G4', 'B4', 'D5', 'F5'] : 
-                    ['C4', 'Eb4', 'G4', 'Bb4', 'C5', 'Eb5'];
-                
-                Tone.Transport.bpm.value = params.tempo;
-                
-                new Tone.Loop(time => {
-                    const note = scale[Math.floor(Math.random() * scale.length)];
-                    synth.triggerAttackRelease(note, '8n', time);
-                }, '4n').start(0);
-
-                Tone.Transport.start();
-                isPlaying = true;
-                showToast('正在播放已存音乐');
-            }
-        }
-
-        function showToast(msg) {
-            const t = document.getElementById('toast');
-            t.innerText = msg;
-            t.classList.remove('hidden');
-            setTimeout(() => t.classList.add('hidden'), 3000);
         }
     </script>
 </body>
