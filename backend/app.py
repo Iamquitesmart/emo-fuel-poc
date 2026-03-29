@@ -63,6 +63,15 @@ class MusicToken(db.Model):
 with app.app_context():
     db.create_all()
 
+@app.route('/api/health')
+def health():
+    return jsonify({
+        'status': 'ok',
+        'db_path': db_path,
+        'template_dir': template_dir,
+        'vercel': os.environ.get('VERCEL', 'no')
+    })
+
 @app.route('/')
 def index():
     return render_template('index.html')
