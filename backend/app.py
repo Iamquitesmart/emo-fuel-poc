@@ -96,10 +96,18 @@ REGIONAL_SENTIMENT = {
     'Global': {'happiness': 0.62, 'sadness': 0.31, 'energy': 0.68}
 }
 
+# Counselor Knowledge/Keywords
+KEYWORDS = {
+    'family': ['mom', 'dad', 'mother', 'father', 'parents', 'mama', 'papa', '妈妈', '爸爸', '父母', '家人'],
+    'missing': ['miss', 'longing', 'missing', '想念', '思念'],
+    'anger': ['angry', 'mad', 'furious', 'pissed', '气死', '生气', '愤怒', '火大'],
+    'joy': ['happy', 'great', 'awesome', 'joy', '开心', '快乐', '太棒了', '舒服']
+}
+
 @app.route('/api/analyze', methods=['POST'])
 def analyze_sentiment():
     data = request.json
-    text = data.get('text', '')
+    text = data.get('text', '').lower()
     round_num = data.get('round', 1)
     
     if not text:
@@ -109,38 +117,74 @@ def analyze_sentiment():
     polarity = analysis.sentiment.polarity
     subjectivity = analysis.sentiment.subjectivity
     
-    # Advanced Music Parameters based on current round
-    # We generate a unique chord for THIS round to be added to the sequence
-    if polarity > 0.3:
+    # Detect Keywords for Context
+    context = 'general'
+    for key, words in KEYWORDS.items():
+        if any(w in text for w in words):
+            context = key
+            break
+
+    # Advanced Music Parameters based on Context and Sentiment
+    chord = []
+    mode = 'peaceful'
+    
+    if context == 'anger' or polarity < -0.5:
+        # Dissonant or heavy: Dm or Tritone influenced
+        chord = ['D3', 'F3', 'Ab3'] if round_num % 2 == 0 else ['G2', 'B2', 'Db3']
+        mode = 'intense'
+    elif context == 'missing' or context == 'family' or polarity < 0:
+        # Melancholic/Soft: Am or Em
+        chord = ['A3', 'C4', 'E4'] if round_num % 2 == 0 else ['E3', 'G3', 'B3']
+        mode = 'nostalgic'
+    elif context == 'joy' or polarity > 0.3:
+        # Bright: C Major or G Major
         chord = ['C4', 'E4', 'G4'] if round_num % 2 == 0 else ['G3', 'B3', 'D4']
         mode = 'bright'
-    elif polarity > -0.3:
+    else:
         chord = ['F3', 'A3', 'C4'] if round_num % 2 == 0 else ['C4', 'E4', 'G4']
         mode = 'peaceful'
-    else:
-        chord = ['A3', 'C4', 'E4'] if round_num % 2 == 0 else ['D3', 'F3', 'A3']
-        mode = 'melancholic'
 
     music_params = {
-        'tempo': 60 + (polarity * 20),
+        'tempo': 70 + (polarity * 30) if mode != 'intense' else 110,
         'scale': 'major' if polarity >= 0 else 'minor',
         'new_chord': chord,
         'mode': mode,
-        'reverb': 0.6 + (subjectivity * 0.3),
-        'energy_gain': abs(polarity) * 10 + 5 # Electricity/Fuel conversion value
+        'reverb': 0.7 + (subjectivity * 0.2),
+        'energy_gain': abs(polarity) * 15 + 10 
     }
     
+    # Context-Aware AI Counselor Responses
     responses = {
-        'bright': f"第 {round_num} 轮：我听到了你内心的欢愉。这段旋律中加入了一组明亮的和弦。继续分享，让我们完成这首曲子。",
-        'peaceful': f"第 {round_num} 轮：沉静的力量在滋长。这一组和弦非常稳健。你还想表达什么？",
-        'melancholic': f"第 {round_num} 轮：没关系，释放出这些忧伤。这组小调和弦会承接你的情绪。我们离完成还有几步。"
+        'general': [
+            f"第 {round_num} 轮：我听到了。这种感觉很真实，能再深入一点吗？",
+            f"第 {round_num} 轮：这种情绪在你的和弦中留下了痕迹。继续说下去，我在听。",
+            f"第 {round_num} 轮：沉静的力量在滋长。这一步很重要。"
+        ],
+        'anger': [
+            f"第 {round_num} 轮：我感受到了你的愤怒，这股力量非常强烈。这种张力会被转化为更深沉的音符，你想谈谈愤怒背后的原因吗？",
+            f"第 {round_num} 轮：愤怒往往是受伤的保护壳。让我们用这段不协和的和弦来释放它。继续说吧。"
+        ],
+        'missing': [
+            f"第 {round_num} 轮：想念是一种温柔的痛。这段旋律加入了一些怀旧的色彩，那种思念此刻在你的心中是什么样子的？",
+            f"第 {round_num} 轮：思念让和弦变得悠长。这种连接感是独一无二的。能告诉我关于她的一个细节吗？"
+        ],
+        'family': [
+            f"第 {round_num} 轮：家人的羁绊总是最深。这段音乐里加入了一些温暖但略显厚重的底色。这种情感对你意味着什么？"
+        ],
+        'joy': [
+            f"第 {round_num} 轮：这种光芒在你的文字中闪烁。明亮的音程已经加入。请尽情沉浸在这种喜悦中，再告诉我一些吧！"
+        ]
     }
+    
+    # Pick a response based on context and round
+    available_responses = responses.get(context, responses['general'])
+    ai_response = available_responses[round_num % len(available_responses)]
     
     return jsonify({
         'polarity': polarity,
         'subjectivity': subjectivity,
         'music_params': music_params,
-        'ai_response': responses.get(mode, "我在听。"),
+        'ai_response': ai_response,
         'regional_data': REGIONAL_SENTIMENT
     })
 

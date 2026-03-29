@@ -163,6 +163,11 @@
             </div>
         </div>
 
+        <!-- Typing Indicator -->
+        <div id="typing-indicator" class="hidden chat-bubble glass self-start text-white/40 italic text-xs mb-4">
+            AI 正在共情中...
+        </div>
+
         <div class="relative group">
             <textarea id="user-input" 
                 class="w-full bg-white/5 border border-white/10 rounded-2xl p-6 pr-24 text-lg focus:ring-1 focus:ring-white/20 focus:outline-none placeholder-white/20 resize-none transition-all glass"
@@ -227,6 +232,7 @@
         const input = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
         const history = document.getElementById('chat-history');
+        const typing = document.getElementById('typing-indicator');
 
         sendBtn.addEventListener('click', async () => {
             const text = input.value.trim();
@@ -237,6 +243,10 @@
             addMessage(text, 'self-end glass text-white');
             input.value = '';
             sendBtn.disabled = true;
+            
+            // Show typing indicator
+            typing.classList.remove('hidden');
+            history.scrollTop = history.scrollHeight;
 
             try {
                 const res = await fetch('/api/analyze', {
@@ -246,14 +256,40 @@
                 });
                 const data = await res.json();
                 
-                handleAIResponse(data);
+                // Delay AI response for "thinking" feel
+                setTimeout(() => {
+                    typing.classList.add('hidden');
+                    handleAIResponse(data);
+                    applyModeVisuals(data.music_params.mode);
+                }, 1200);
+                
                 updateGlobalMap(data.regional_data);
             } catch (e) {
                 console.error(e);
+                typing.classList.add('hidden');
             } finally {
                 if (currentRound < 10) sendBtn.disabled = false;
             }
         });
+
+        function applyModeVisuals(mode) {
+            const overlay = document.querySelector('.overlay');
+            const colors = {
+                intense: 'rgba(255, 0, 0, 0.2)',
+                nostalgic: 'rgba(100, 100, 255, 0.2)',
+                bright: 'rgba(255, 255, 100, 0.1)',
+                peaceful: 'rgba(0, 0, 0, 0.9)'
+            };
+            overlay.style.background = `radial-gradient(circle at center, transparent, ${colors[mode] || colors.peaceful})`;
+            
+            // Flash effect for intense
+            if (mode === 'intense') {
+                const flash = document.createElement('div');
+                flash.className = 'fixed inset-0 bg-white/10 z-[100] pointer-events-none';
+                document.body.appendChild(flash);
+                setTimeout(() => flash.remove(), 100);
+            }
+        }
 
         function updateProgress() {
             const bar = document.getElementById('main-progress');
