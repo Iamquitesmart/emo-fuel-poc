@@ -11,6 +11,7 @@ import nltk
 nltk_data_path = os.path.join('/tmp', 'nltk_data')
 if not os.path.exists(nltk_data_path):
     os.makedirs(nltk_data_path)
+os.environ['NLTK_DATA'] = nltk_data_path
 nltk.data.path.append(nltk_data_path)
 
 # Download required NLTK data to /tmp
