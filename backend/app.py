@@ -5,11 +5,29 @@ from datetime import datetime
 from textblob import TextBlob
 import os
 import json
+import nltk
+
+# Vercel-specific NLTK path
+nltk_data_path = os.path.join('/tmp', 'nltk_data')
+if not os.path.exists(nltk_data_path):
+    os.makedirs(nltk_data_path)
+nltk.data.path.append(nltk_data_path)
+
+# Download required NLTK data to /tmp
+try:
+    nltk.data.find('tokenizers/punkt', paths=[nltk_data_path])
+except LookupError:
+    nltk.download('punkt', download_dir=nltk_data_path)
 
 # Setup directories
 base_dir = os.path.abspath(os.path.dirname(__file__))
+# Correct template path for Vercel
 template_dir = os.path.join(os.path.dirname(base_dir), 'frontend', 'templates')
-db_path = os.path.join(base_dir, 'emo.db')
+# Vercel is read-only except for /tmp
+if os.environ.get('VERCEL'):
+    db_path = '/tmp/emo.db'
+else:
+    db_path = os.path.join(base_dir, 'emo.db')
 
 app = Flask(__name__, template_folder=template_dir)
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
