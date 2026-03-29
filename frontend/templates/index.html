@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EMO.SOUL - 情绪疗愈空间</title>
+    <title>EMO.SOUL - 情绪燃料实验室</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -22,33 +22,33 @@
             top: 0; left: 0; width: 100%; height: 100%;
             object-fit: cover;
             z-index: -2;
-            opacity: 0.4;
+            opacity: 0.3;
             transition: opacity 2s ease;
         }
 
         .overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: radial-gradient(circle at center, transparent, rgba(0,0,0,0.8));
+            background: radial-gradient(circle at center, transparent, rgba(0,0,0,0.9));
             z-index: -1;
         }
 
         .glass {
             background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(20px);
+            backdrop-filter: blur(25px);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .chat-bubble {
-            max-width: 80%;
+            max-width: 85%;
             padding: 1rem 1.5rem;
-            border-radius: 20px;
-            margin-bottom: 1rem;
-            animation: fadeIn 0.5s ease forwards;
+            border-radius: 24px;
+            margin-bottom: 1.2rem;
+            animation: fadeIn 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards;
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
+            from { opacity: 0; transform: translateY(15px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
@@ -59,80 +59,137 @@
             z-index: 10;
         }
 
-        .music-visualizer {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            height: 40px;
+        .progress-container {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            z-index: 50;
         }
 
-        .vis-bar {
-            width: 3px;
-            background: #fff;
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(to right, #fff, #3b82f6);
             border-radius: 10px;
-            transition: height 0.1s ease;
+            width: 0%;
+            transition: width 0.5s ease;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+
+        .energy-bolt {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            pointer-events: none;
+            z-index: 100;
+            filter: drop-shadow(0 0 10px #3b82f6);
+        }
+
+        .map-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        /* Weather Select */
+        .weather-btn {
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s;
+        }
+        .weather-btn.active {
+            background: white;
+            color: black;
         }
     </style>
 </head>
 <body class="min-h-screen">
-    <!-- Weather & Visuals -->
     <canvas id="weather-canvas"></canvas>
     <video id="bg-video" class="video-bg" autoplay muted loop playsinline></video>
     <div class="overlay"></div>
 
     <!-- Nav -->
-    <nav class="fixed top-0 w-full p-6 flex justify-between items-center z-50">
-        <div class="flex items-center gap-2 opacity-80">
-            <i data-lucide="wind" class="w-5 h-5"></i>
-            <span class="text-sm tracking-widest uppercase">EMO.SOUL</span>
+    <nav class="fixed top-0 w-full p-6 flex justify-between items-center z-50 glass border-b border-white/5">
+        <div class="flex items-center gap-3">
+            <i data-lucide="zap" class="w-6 h-6 text-blue-400 fill-blue-400"></i>
+            <span class="text-lg font-bold tracking-tighter uppercase">EMO.LAB</span>
         </div>
+        
+        <div class="flex gap-2">
+            <button onclick="setWeather('clear')" id="btn-clear" class="weather-btn glass active">晴朗</button>
+            <button onclick="setWeather('rain')" id="btn-rain" class="weather-btn glass">阴雨</button>
+            <button onclick="setWeather('snow')" id="btn-snow" class="weather-btn glass">飘雪</button>
+        </div>
+
         <div class="flex items-center gap-6">
+            <div id="energy-counter" class="text-sm font-mono text-blue-400 flex items-center gap-2">
+                <i data-lucide="battery-charging" class="w-4 h-4"></i>
+                <span id="energy-val">0</span> kW
+            </div>
             <button onclick="toggleMute()" class="opacity-50 hover:opacity-100 transition-opacity">
                 <i id="mute-icon" data-lucide="volume-2" class="w-5 h-5"></i>
             </button>
-            <div id="status-tag" class="text-[10px] px-2 py-1 border border-white/20 rounded-full opacity-50 uppercase tracking-tighter">
-                Ready
-            </div>
         </div>
     </nav>
 
-    <!-- Main Content: Chat Interface -->
+    <!-- Progress Indicator -->
+    <div class="progress-container">
+        <div class="progress-bar" id="main-progress"></div>
+        <div class="text-[10px] text-center mt-2 opacity-40 uppercase tracking-widest">和弦构造进度: <span id="round-text">0</span>/10</div>
+    </div>
+
+    <!-- Global Map UI -->
+    <div class="fixed left-6 top-24 glass p-6 rounded-3xl w-56 z-30">
+        <h3 class="text-[10px] uppercase tracking-widest text-white/40 mb-4">全球情绪分布</h3>
+        <div id="sentiment-map" class="space-y-4">
+            <!-- Map items -->
+        </div>
+    </div>
+
+    <!-- Main Content -->
     <main class="h-screen flex flex-col justify-end px-6 pb-24 max-w-4xl mx-auto relative z-20">
-        
-        <div id="chat-history" class="overflow-y-auto mb-8 pr-4 flex flex-col scroll-smooth">
-            <!-- Messages appear here -->
+        <div id="chat-history" class="overflow-y-auto mb-8 pr-4 flex flex-col scroll-smooth h-[60vh]">
             <div class="chat-bubble glass self-start text-white/80">
-                欢迎来到你的情绪空间。告诉我，此刻你的内心世界正经历着怎样的波动？
+                [系统初始化完毕] 欢迎进入情绪燃料实验室。我们将通过 10 轮深度觉察对话，将你的情绪波长转化为复合和弦音轨与数字能源。
             </div>
         </div>
 
         <div class="relative group">
             <textarea id="user-input" 
                 class="w-full bg-white/5 border border-white/10 rounded-2xl p-6 pr-24 text-lg focus:ring-1 focus:ring-white/20 focus:outline-none placeholder-white/20 resize-none transition-all glass"
-                placeholder="在此输入你的感悟..." rows="2"></textarea>
+                placeholder="分享你此刻的心境..." rows="2"></textarea>
             
-            <div class="absolute right-4 bottom-4 flex items-center gap-4">
-                <div class="music-visualizer opacity-0 transition-opacity duration-1000" id="visualizer">
-                    <!-- Bars added by JS -->
-                </div>
-                <button id="send-btn" class="w-12 h-12 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 transition-transform active:scale-95 shadow-xl">
-                    <i data-lucide="arrow-right" class="w-5 h-5"></i>
-                </button>
-            </div>
+            <button id="send-btn" class="absolute right-4 bottom-4 w-12 h-12 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 transition-transform active:scale-95 shadow-xl disabled:opacity-30">
+                <i data-lucide="arrow-right" class="w-5 h-5"></i>
+            </button>
         </div>
     </main>
 
-    <!-- Dashboard for Tokens -->
-    <div id="token-card" class="fixed top-24 right-6 w-64 glass rounded-3xl p-6 hidden translate-x-72 transition-transform duration-700 z-30">
-        <div class="flex justify-between items-start mb-6">
-            <span class="text-[10px] uppercase tracking-widest text-white/40">Emotion Token</span>
-            <i data-lucide="shield-check" class="w-4 h-4 text-white/40"></i>
-        </div>
-        <div class="space-y-4">
-            <div class="text-2xl font-bold tracking-tighter" id="token-price">0.02 EMO</div>
-            <div class="text-[10px] font-mono text-white/30 truncate" id="token-hash">#00000000</div>
-            <button id="mint-btn" class="w-full py-3 bg-white text-black rounded-xl text-xs font-bold hover:bg-white/90 transition-all">
-                铸造为 NFT
+    <!-- Final Token Card -->
+    <div id="final-card" class="fixed inset-0 flex items-center justify-center bg-black/80 z-[200] hidden">
+        <div class="glass p-12 rounded-[40px] text-center max-w-md space-y-8 scale-90 animate-in fade-in zoom-in duration-500">
+            <div class="w-24 h-24 bg-blue-500/20 rounded-full mx-auto flex items-center justify-center text-blue-400">
+                <i data-lucide="zap" class="w-12 h-12 fill-current"></i>
+            </div>
+            <div>
+                <h2 class="text-3xl font-bold mb-2">情绪曲谱已生成</h2>
+                <p class="text-white/40 text-sm">已累积 10 组复合和弦，总计转化能量:</p>
+                <div class="text-5xl font-bold text-blue-400 mt-4" id="final-energy">0 kW</div>
+            </div>
+            <button id="mint-btn" class="w-full py-4 bg-white text-black rounded-2xl font-bold hover:scale-105 transition-transform">
+                铸造情绪 Token (能源燃料)
+            </button>
+            <button onclick="location.reload()" class="text-xs text-white/20 hover:text-white transition-colors uppercase tracking-widest">
+                重新开启实验
             </button>
         </div>
     </div>
@@ -140,70 +197,69 @@
     <script>
         lucide.createIcons();
 
-        // Constants
-        const VIDEO_SOURCES = {
-            bright: 'https://cdn.pixabay.com/video/2021/04/12/70875-536411514_large.mp4',
-            peaceful: 'https://cdn.pixabay.com/video/2023/10/24/186355-877964121_large.mp4',
-            melancholic: 'https://cdn.pixabay.com/video/2022/10/25/136450-764357731_large.mp4',
-            default: 'https://cdn.pixabay.com/video/2023/10/24/186355-877964121_large.mp4'
-        };
-
         // State
-        let isMuted = false;
-        let synth, pad, reverb;
-        let isPlaying = false;
+        let currentRound = 0;
+        let totalEnergy = 0;
+        let currentChords = [];
         let weatherType = 'clear';
-        let currentParams = null;
+        let synth, pad, reverb;
+        let isMuted = false;
 
         // Audio Setup
         async function setupAudio() {
             if (synth) return;
             await Tone.start();
-            
-            reverb = new Tone.Reverb({ decay: 5, wet: 0.6 }).toDestination();
-            
-            // Pad Synth for Chords
+            reverb = new Tone.Reverb({ decay: 6, wet: 0.5 }).toDestination();
             pad = new Tone.PolySynth(Tone.Synth, {
                 oscillator: { type: 'sine' },
-                envelope: { attack: 2, decay: 1, sustain: 0.8, release: 4 }
+                envelope: { attack: 2, decay: 1, sustain: 1, release: 5 }
             }).connect(reverb);
-            pad.volume.value = -25;
-
-            // Lead Synth for Melody
+            pad.volume.value = -30;
+            
             synth = new Tone.MonoSynth({
                 oscillator: { type: 'triangle' },
-                envelope: { attack: 0.5, decay: 0.2, sustain: 0.5, release: 1.5 }
+                envelope: { attack: 0.5, release: 2 }
             }).connect(reverb);
-            synth.volume.value = -15;
+            synth.volume.value = -20;
         }
 
-        // Chat Interaction
+        // Send Logic
         const input = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
         const history = document.getElementById('chat-history');
 
         sendBtn.addEventListener('click', async () => {
             const text = input.value.trim();
-            if (!text) return;
+            if (!text || currentRound >= 10) return;
 
-            // Add user message
+            currentRound++;
+            updateProgress();
             addMessage(text, 'self-end glass text-white');
             input.value = '';
+            sendBtn.disabled = true;
 
             try {
                 const res = await fetch('/api/analyze', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({text})
+                    body: JSON.stringify({text, round: currentRound})
                 });
                 const data = await res.json();
                 
-                currentParams = data.music_params;
                 handleAIResponse(data);
+                updateGlobalMap(data.regional_data);
             } catch (e) {
                 console.error(e);
+            } finally {
+                if (currentRound < 10) sendBtn.disabled = false;
             }
         });
+
+        function updateProgress() {
+            const bar = document.getElementById('main-progress');
+            bar.style.width = `${currentRound * 10}%`;
+            document.getElementById('round-text').innerText = currentRound;
+        }
 
         function addMessage(text, classes) {
             const msg = document.createElement('div');
@@ -214,51 +270,74 @@
         }
 
         async function handleAIResponse(data) {
+            // Energy animation
+            const gain = Math.round(data.music_params.energy_gain);
+            totalEnergy += gain;
+            document.getElementById('energy-val').innerText = totalEnergy;
+            spawnEnergyEffect();
+
+            // Music
+            await setupAudio();
+            currentChords.push(data.music_params.new_chord);
+            playEvolvingMusic(data.music_params);
+
             // AI Text
             setTimeout(() => {
-                addMessage(data.ai_response, 'self-start glass text-white/80 border-l-2 border-white/40');
-            }, 1000);
-
-            // UI Changes
-            document.getElementById('bg-video').src = VIDEO_SOURCES[data.music_params.mode] || VIDEO_SOURCES.default;
-            weatherType = data.music_params.weather;
-            
-            // Token UI
-            const card = document.getElementById('token-card');
-            card.classList.remove('hidden');
-            setTimeout(() => card.style.transform = 'translateX(0)', 100);
-            document.getElementById('token-price').innerText = `${(0.01 + Math.abs(data.polarity)*0.1).toFixed(3)} EMO`;
-            document.getElementById('token-hash').innerText = `#${Math.random().toString(16).slice(2, 10)}`;
-
-            // Start/Update Music
-            await setupAudio();
-            playMusic(data.music_params);
+                addMessage(data.ai_response, 'self-start glass text-blue-200 border-l-2 border-blue-500/50');
+                if (currentRound >= 10) showFinalCard();
+            }, 800);
         }
 
-        function playMusic(params) {
+        function playEvolvingMusic(params) {
             Tone.Transport.stop();
             Tone.Transport.cancel();
-            
             Tone.Transport.bpm.value = params.tempo;
-            
-            let chordIdx = 0;
+
+            let idx = 0;
             const loop = new Tone.Loop(time => {
-                const chord = params.chords[chordIdx % params.chords.length];
+                // Play ALL accumulated chords in sequence
+                const chord = currentChords[idx % currentChords.length];
                 pad.triggerAttackRelease(chord, '1n', time);
                 
-                // Random melody based on chord notes
+                // Add lead melody based on current round's chord
                 const note = chord[Math.floor(Math.random() * chord.length)];
                 synth.triggerAttackRelease(note, '4n', time + Tone.Time('4n').toSeconds());
                 
-                chordIdx++;
-                animateVisualizer();
+                idx++;
             }, '1n').start(0);
 
             Tone.Transport.start();
-            document.getElementById('visualizer').classList.remove('opacity-0');
+        }
+
+        function showFinalCard() {
+            const card = document.getElementById('final-card');
+            card.classList.remove('hidden');
+            document.getElementById('final-energy').innerText = `${totalEnergy} kW`;
+        }
+
+        // Global Map
+        function updateGlobalMap(data) {
+            const map = document.getElementById('sentiment-map');
+            map.innerHTML = Object.entries(data).map(([region, vals]) => `
+                <div class="space-y-1">
+                    <div class="flex justify-between text-[10px]">
+                        <span class="text-white/60">${region}</span>
+                        <span class="text-blue-400">${Math.round(vals.energy * 100)}% 负荷</span>
+                    </div>
+                    <div class="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                        <div class="h-full bg-blue-500" style="width: ${vals.happiness * 100}%"></div>
+                    </div>
+                </div>
+            `).join('');
         }
 
         // Weather System
+        function setWeather(type) {
+            weatherType = type;
+            document.querySelectorAll('.weather-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`btn-${type}`).classList.add('active');
+        }
+
         const canvas = document.getElementById('weather-canvas');
         const ctx = canvas.getContext('2d');
         let particles = [];
@@ -271,64 +350,48 @@
         resize();
 
         class Particle {
-            constructor() {
-                this.reset();
-            }
+            constructor() { this.reset(); }
             reset() {
                 this.x = Math.random() * canvas.width;
                 this.y = -20;
                 this.size = weatherType === 'snow' ? Math.random() * 3 + 1 : Math.random() * 1 + 1;
                 this.speed = weatherType === 'snow' ? Math.random() * 1 + 0.5 : Math.random() * 5 + 10;
-                this.opacity = Math.random() * 0.5 + 0.2;
+                this.opacity = Math.random() * 0.4 + 0.1;
             }
             update() {
                 this.y += this.speed;
-                if (weatherType === 'snow') this.x += Math.sin(this.y / 50) * 1;
                 if (this.y > canvas.height) this.reset();
             }
             draw() {
                 ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
                 ctx.beginPath();
-                if (weatherType === 'snow') {
-                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                } else {
-                    ctx.fillRect(this.x, this.y, 1, 15);
-                }
+                if (weatherType === 'snow') ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                else ctx.fillRect(this.x, this.y, 1, 15);
                 ctx.fill();
             }
-        }
-
-        function initWeather() {
-            particles = Array.from({length: 100}, () => new Particle());
-            animate();
         }
 
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             if (weatherType !== 'clear') {
-                particles.forEach(p => {
-                    p.update();
-                    p.draw();
-                });
+                if (particles.length < 100) particles.push(new Particle());
+                particles.forEach(p => { p.update(); p.draw(); });
             }
             requestAnimationFrame(animate);
         }
-        initWeather();
+        animate();
 
-        // Visualizer
-        const vis = document.getElementById('visualizer');
-        for(let i=0; i<8; i++) {
-            const b = document.createElement('div');
-            b.className = 'vis-bar';
-            b.style.height = '10px';
-            vis.appendChild(b);
-        }
-
-        function animateVisualizer() {
-            const bars = document.querySelectorAll('.vis-bar');
-            bars.forEach(b => {
-                b.style.height = `${Math.random() * 30 + 10}px`;
-            });
+        function spawnEnergyEffect() {
+            const bolt = document.createElement('div');
+            bolt.className = 'energy-bolt';
+            bolt.innerHTML = '<i data-lucide="zap" class="w-12 h-12 text-blue-400"></i>';
+            document.body.appendChild(bolt);
+            lucide.createIcons();
+            
+            bolt.animate([
+                { transform: 'translate(-50%, -50%) scale(0)', opacity: 1 },
+                { transform: 'translate(-50%, -50%) scale(4)', opacity: 0 }
+            ], { duration: 800, easing: 'ease-out' }).onfinish = () => bolt.remove();
         }
 
         function toggleMute() {
@@ -337,6 +400,9 @@
             document.getElementById('mute-icon').setAttribute('data-lucide', isMuted ? 'volume-x' : 'volume-2');
             lucide.createIcons();
         }
+
+        // Initial Map Load
+        fetch('/api/global_sentiment').then(r => r.json()).then(updateGlobalMap);
     </script>
 </body>
 </html>

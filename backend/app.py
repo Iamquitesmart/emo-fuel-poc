@@ -88,10 +88,19 @@ def health():
 def index():
     return render_template('index.html')
 
+# Global/Mock Regional Sentiment Data
+REGIONAL_SENTIMENT = {
+    'Asia': {'happiness': 0.7, 'sadness': 0.2, 'energy': 0.8},
+    'Europe': {'happiness': 0.5, 'sadness': 0.4, 'energy': 0.5},
+    'Americas': {'happiness': 0.6, 'sadness': 0.3, 'energy': 0.7},
+    'Global': {'happiness': 0.62, 'sadness': 0.31, 'energy': 0.68}
+}
+
 @app.route('/api/analyze', methods=['POST'])
 def analyze_sentiment():
     data = request.json
     text = data.get('text', '')
+    round_num = data.get('round', 1)
     
     if not text:
         return jsonify({'error': 'No text provided'}), 400
@@ -100,49 +109,44 @@ def analyze_sentiment():
     polarity = analysis.sentiment.polarity
     subjectivity = analysis.sentiment.subjectivity
     
-    # Advanced Music Parameters
-    # Positive -> Major, Faster, Bright
-    # Negative -> Minor, Slower, Dark
-    # Subjective -> More reverb, complex chords
-    
-    chords = []
+    # Advanced Music Parameters based on current round
+    # We generate a unique chord for THIS round to be added to the sequence
     if polarity > 0.3:
-        # Uplifting: I - V - vi - IV
-        chords = [['C4', 'E4', 'G4'], ['G3', 'B3', 'D4'], ['A3', 'C4', 'E4'], ['F3', 'A3', 'C4']]
+        chord = ['C4', 'E4', 'G4'] if round_num % 2 == 0 else ['G3', 'B3', 'D4']
         mode = 'bright'
     elif polarity > -0.3:
-        # Neutral/Peaceful: I - IV - I - V
-        chords = [['C4', 'E4', 'G4'], ['F3', 'A3', 'C4'], ['C4', 'E4', 'G4'], ['G3', 'B3', 'D4']]
+        chord = ['F3', 'A3', 'C4'] if round_num % 2 == 0 else ['C4', 'E4', 'G4']
         mode = 'peaceful'
     else:
-        # Melancholic: i - VI - III - VII
-        chords = [['A3', 'C4', 'E4'], ['F3', 'A3', 'C4'], ['C4', 'E4', 'G4'], ['G3', 'B3', 'D4']]
+        chord = ['A3', 'C4', 'E4'] if round_num % 2 == 0 else ['D3', 'F3', 'A3']
         mode = 'melancholic'
 
     music_params = {
-        'tempo': 60 + (polarity * 20), # 40-80 BPM for soothing
+        'tempo': 60 + (polarity * 20),
         'scale': 'major' if polarity >= 0 else 'minor',
-        'chords': chords,
+        'new_chord': chord,
         'mode': mode,
         'reverb': 0.6 + (subjectivity * 0.3),
-        'pad_volume': -25,
-        'lead_volume': -15,
-        'weather': 'snow' if polarity < -0.2 else 'rain' if subjectivity > 0.6 else 'clear'
+        'energy_gain': abs(polarity) * 10 + 5 # Electricity/Fuel conversion value
     }
     
-    # AI Counselor Simulation Response
     responses = {
-        'bright': "我能感受到你文字中透出的光。这种积极的能量像是一段明亮的和弦，你愿意多聊聊让你开心的那个瞬间吗？",
-        'peaceful': "你的内心此刻似乎很平静。这种宁静是极其宝贵的，像是清晨的微风。在这样的时刻，你通常会思考些什么？",
-        'melancholic': "听起来你正在经历一段沉重的时光。没关系，每个人都有这样的时刻。就像阴雨天，它也是自然的一部分。你想释放掉这种情绪吗？"
+        'bright': f"第 {round_num} 轮：我听到了你内心的欢愉。这段旋律中加入了一组明亮的和弦。继续分享，让我们完成这首曲子。",
+        'peaceful': f"第 {round_num} 轮：沉静的力量在滋长。这一组和弦非常稳健。你还想表达什么？",
+        'melancholic': f"第 {round_num} 轮：没关系，释放出这些忧伤。这组小调和弦会承接你的情绪。我们离完成还有几步。"
     }
     
     return jsonify({
         'polarity': polarity,
         'subjectivity': subjectivity,
         'music_params': music_params,
-        'ai_response': responses.get(mode, "我在听。继续说下去...")
+        'ai_response': responses.get(mode, "我在听。"),
+        'regional_data': REGIONAL_SENTIMENT
     })
+
+@app.route('/api/global_sentiment', methods=['GET'])
+def get_global_sentiment():
+    return jsonify(REGIONAL_SENTIMENT)
 
 @app.route('/api/save', methods=['POST'])
 def save_entry():
