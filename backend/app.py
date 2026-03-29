@@ -9,44 +9,31 @@ import nltk
 
 # Vercel-specific NLTK path
 nltk_data_path = os.path.join('/tmp', 'nltk_data')
-if not os.path.exists(nltk_data_path):
-    os.makedirs(nltk_data_path)
 os.environ['NLTK_DATA'] = nltk_data_path
-nltk.data.path.append(nltk_data_path)
 
-# Download required NLTK data to /tmp
-try:
-    nltk.data.find('tokenizers/punkt', paths=[nltk_data_path])
-    print("Found punkt")
-except (LookupError, Exception):
-    print("Downloading punkt...")
-    nltk.download('punkt', download_dir=nltk_data_path, quiet=True)
+def init_resources():
+    if not os.path.exists(nltk_data_path):
+        os.makedirs(nltk_data_path)
+    if nltk_data_path not in nltk.data.path:
+        nltk.data.path.append(nltk_data_path)
+    
+    try:
+        nltk.data.find('tokenizers/punkt', paths=[nltk_data_path])
+    except (LookupError, Exception):
+        nltk.download('punkt', download_dir=nltk_data_path, quiet=True)
 
-try:
-    nltk.data.find('taggers/averaged_perceptron_tagger', paths=[nltk_data_path])
-    print("Found tagger")
-except (LookupError, Exception):
-    print("Downloading tagger...")
-    nltk.download('averaged_perceptron_tagger', download_dir=nltk_data_path, quiet=True)
-
-# Test TextBlob at startup
-try:
-    TextBlob("test").sentiment
-    print("TextBlob ready")
-except Exception as e:
-    print(f"TextBlob Error: {e}")
+    try:
+        nltk.data.find('taggers/averaged_perceptron_tagger', paths=[nltk_data_path])
+    except (LookupError, Exception):
+        nltk.download('averaged_perceptron_tagger', download_dir=nltk_data_path, quiet=True)
+    
+    with app.app_context():
+        db.create_all()
 
 # Setup directories
 base_dir = os.path.abspath(os.path.dirname(__file__))
-# Correct template path for Vercel
 template_dir = os.path.join(os.path.dirname(base_dir), 'frontend', 'templates')
 
-# Log for Vercel debugging
-print(f"Base Dir: {base_dir}")
-print(f"Template Dir: {template_dir}")
-print(f"Template Dir Exists: {os.path.exists(template_dir)}")
-
-# Vercel is read-only except for /tmp
 if os.environ.get('VERCEL'):
     db_path = '/tmp/emo.db'
 else:
@@ -58,6 +45,16 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 CORS(app)
 
 db = SQLAlchemy(app)
+
+# Resource initialization flag
+resources_initialized = False
+
+@app.before_request
+def initialize():
+    global resources_initialized
+    if not resources_initialized:
+        init_resources()
+        resources_initialized = True
 
 # Database Models
 class DiaryEntry(db.Model):
@@ -77,10 +74,7 @@ class MusicToken(db.Model):
     owner = db.Column(db.String(50), default='Original Artist')
     is_for_sale = db.Column(db.Boolean, default=True)
 
-# Create DB
-with app.app_context():
-    db.create_all()
-
+# Routes
 @app.route('/api/health')
 def health():
     return jsonify({
