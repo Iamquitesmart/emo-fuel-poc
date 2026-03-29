@@ -125,6 +125,11 @@
         </div>
         
         <div class="flex gap-2">
+            <select id="genre-select" class="weather-btn glass appearance-none cursor-pointer">
+                <option value="ambient">曲风: Ambient</option>
+                <option value="lo-fi">曲风: Lo-Fi</option>
+                <option value="cinematic">曲风: Cinematic</option>
+            </select>
             <button onclick="setWeather('clear')" id="btn-clear" class="weather-btn glass active">晴朗</button>
             <button onclick="setWeather('rain')" id="btn-rain" class="weather-btn glass">阴雨</button>
             <button onclick="setWeather('snow')" id="btn-snow" class="weather-btn glass">飘雪</button>
@@ -211,18 +216,27 @@
         let isMuted = false;
 
         // Audio Setup
-        async function setupAudio() {
-            if (synth) return;
+        async function setupAudio(genre) {
+            if (synth) {
+                // Update synth based on genre if already exists
+                const synthType = genre === 'lo-fi' ? 'triangle' : (genre === 'cinematic' ? 'sawtooth' : 'sine');
+                pad.set({ oscillator: { type: synthType } });
+                return;
+            };
+            
             await Tone.start();
-            reverb = new Tone.Reverb({ decay: 6, wet: 0.5 }).toDestination();
+            reverb = new Tone.Reverb({ decay: 6, wet: 0.6 }).toDestination();
+            
+            const synthType = genre === 'lo-fi' ? 'triangle' : (genre === 'cinematic' ? 'sawtooth' : 'sine');
+            
             pad = new Tone.PolySynth(Tone.Synth, {
-                oscillator: { type: 'sine' },
-                envelope: { attack: 2, decay: 1, sustain: 1, release: 5 }
+                oscillator: { type: synthType },
+                envelope: { attack: 3, decay: 1, sustain: 1, release: 5 }
             }).connect(reverb);
-            pad.volume.value = -30;
+            pad.volume.value = -25;
             
             synth = new Tone.MonoSynth({
-                oscillator: { type: 'triangle' },
+                oscillator: { type: 'sine' },
                 envelope: { attack: 0.5, release: 2 }
             }).connect(reverb);
             synth.volume.value = -20;
@@ -236,6 +250,7 @@
 
         sendBtn.addEventListener('click', async () => {
             const text = input.value.trim();
+            const genre = document.getElementById('genre-select').value;
             if (!text || currentRound >= 10) return;
 
             currentRound++;
@@ -252,7 +267,7 @@
                 const res = await fetch('/api/analyze', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({text, round: currentRound})
+                    body: JSON.stringify({text, round: currentRound, genre: genre})
                 });
                 const data = await res.json();
                 
@@ -313,7 +328,7 @@
             spawnEnergyEffect();
 
             // Music
-            await setupAudio();
+            await setupAudio(data.music_params.genre);
             currentChords.push(data.music_params.new_chord);
             playEvolvingMusic(data.music_params);
 

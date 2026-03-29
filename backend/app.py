@@ -104,11 +104,50 @@ KEYWORDS = {
     'joy': ['happy', 'great', 'awesome', 'joy', '开心', '快乐', '太棒了', '舒服']
 }
 
+import requests
+
+# LLM Config (Optional: User can set GROQ_API_KEY in Vercel/Local)
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
+
+def get_llm_response(user_text, round_num, context):
+    if not GROQ_API_KEY:
+        # Fallback to a much smarter rule-based counselor if no API key
+        return f"第 {round_num} 轮：我深刻理解这种 {context} 的感受。在这一步，我们让和弦更加深沉。你能谈谈这背后的具体瞬间吗？"
+    
+    try:
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+        prompt = f"你是一位高级心理咨询师。用户正在参与一个‘情绪燃料实验’。这是第{round_num}轮对话。用户的情绪关键词是{context}。用户的输入是：‘{user_text}’。请用一段充满共情、富有诗意且专业的中文回复（50字以内），引导用户继续深入探索。"
+        data = {
+            "model": "llama-3-8b-8192",
+            "messages": [{"role": "system", "content": "你是一位富有共情力的心理咨询师，语言优美且具有深度。"}, {"role": "user", "content": prompt}],
+            "max_tokens": 100
+        }
+        res = requests.post(url, headers=headers, json=data, timeout=5)
+        return res.json()['choices'][0]['message']['content']
+    except Exception as e:
+        return f"第 {round_num} 轮：情感的波动已被捕捉。这一步的和弦充满了共鸣，请继续分享你的感受。"
+
+# Music Theory Mappings
+GENRES = {
+    'ambient': {'tempo': [60, 80], 'synth': 'sine', 'reverb': 0.8},
+    'lo-fi': {'tempo': [80, 95], 'synth': 'triangle', 'reverb': 0.4},
+    'cinematic': {'tempo': [70, 90], 'synth': 'sawtooth', 'reverb': 0.9}
+}
+
+SCALES = {
+    'bright': ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'], # C Major
+    'peaceful': ['F3', 'G3', 'A3', 'Bb3', 'C4', 'D4', 'E4'], # F Major/Lydian
+    'nostalgic': ['A3', 'B3', 'C4', 'D4', 'E4', 'F4', 'G4'], # A Minor
+    'intense': ['D3', 'Eb3', 'F3', 'G3', 'A3', 'Bb3', 'C4'] # D Phrygian
+}
+
 @app.route('/api/analyze', methods=['POST'])
 def analyze_sentiment():
     data = request.json
     text = data.get('text', '').lower()
     round_num = data.get('round', 1)
+    genre = data.get('genre', 'ambient')
     
     if not text:
         return jsonify({'error': 'No text provided'}), 400
@@ -117,72 +156,44 @@ def analyze_sentiment():
     polarity = analysis.sentiment.polarity
     subjectivity = analysis.sentiment.subjectivity
     
-    # Detect Keywords for Context
+    # Context Detection
     context = 'general'
     for key, words in KEYWORDS.items():
         if any(w in text for w in words):
             context = key
             break
 
-    # Advanced Music Parameters based on Context and Sentiment
-    chord = []
-    mode = 'peaceful'
+    # Determine Mode and Scale
+    if context == 'anger' or polarity < -0.4: mode = 'intense'
+    elif context == 'missing' or context == 'family' or polarity < 0: mode = 'nostalgic'
+    elif context == 'joy' or polarity > 0.4: mode = 'bright'
+    else: mode = 'peaceful'
+
+    scale = SCALES[mode]
     
-    if context == 'anger' or polarity < -0.5:
-        # Dissonant or heavy: Dm or Tritone influenced
-        chord = ['D3', 'F3', 'Ab3'] if round_num % 2 == 0 else ['G2', 'B2', 'Db3']
-        mode = 'intense'
-    elif context == 'missing' or context == 'family' or polarity < 0:
-        # Melancholic/Soft: Am or Em
-        chord = ['A3', 'C4', 'E4'] if round_num % 2 == 0 else ['E3', 'G3', 'B3']
-        mode = 'nostalgic'
-    elif context == 'joy' or polarity > 0.3:
-        # Bright: C Major or G Major
-        chord = ['C4', 'E4', 'G4'] if round_num % 2 == 0 else ['G3', 'B3', 'D4']
-        mode = 'bright'
-    else:
-        chord = ['F3', 'A3', 'C4'] if round_num % 2 == 0 else ['C4', 'E4', 'G4']
-        mode = 'peaceful'
+    # Chord Progression Logic: Progressive addition
+    # Progression: I -> IV -> V -> vi -> IV -> I -> ...
+    progression_indices = [0, 3, 4, 5, 3, 0, 1, 4]
+    base_idx = progression_indices[(round_num - 1) % len(progression_indices)]
+    
+    # Construct a chord (Triad) from the scale
+    root = scale[base_idx]
+    third = scale[(base_idx + 2) % len(scale)]
+    fifth = scale[(base_idx + 4) % len(scale)]
+    chord = [root, third, fifth]
 
     music_params = {
-        'tempo': 70 + (polarity * 30) if mode != 'intense' else 110,
-        'scale': 'major' if polarity >= 0 else 'minor',
+        'tempo': GENRES[genre]['tempo'][0] + (polarity * 10),
         'new_chord': chord,
         'mode': mode,
-        'reverb': 0.7 + (subjectivity * 0.2),
+        'genre': genre,
         'energy_gain': abs(polarity) * 15 + 10 
     }
     
-    # Context-Aware AI Counselor Responses
-    responses = {
-        'general': [
-            f"第 {round_num} 轮：我听到了。这种感觉很真实，能再深入一点吗？",
-            f"第 {round_num} 轮：这种情绪在你的和弦中留下了痕迹。继续说下去，我在听。",
-            f"第 {round_num} 轮：沉静的力量在滋长。这一步很重要。"
-        ],
-        'anger': [
-            f"第 {round_num} 轮：我感受到了你的愤怒，这股力量非常强烈。这种张力会被转化为更深沉的音符，你想谈谈愤怒背后的原因吗？",
-            f"第 {round_num} 轮：愤怒往往是受伤的保护壳。让我们用这段不协和的和弦来释放它。继续说吧。"
-        ],
-        'missing': [
-            f"第 {round_num} 轮：想念是一种温柔的痛。这段旋律加入了一些怀旧的色彩，那种思念此刻在你的心中是什么样子的？",
-            f"第 {round_num} 轮：思念让和弦变得悠长。这种连接感是独一无二的。能告诉我关于她的一个细节吗？"
-        ],
-        'family': [
-            f"第 {round_num} 轮：家人的羁绊总是最深。这段音乐里加入了一些温暖但略显厚重的底色。这种情感对你意味着什么？"
-        ],
-        'joy': [
-            f"第 {round_num} 轮：这种光芒在你的文字中闪烁。明亮的音程已经加入。请尽情沉浸在这种喜悦中，再告诉我一些吧！"
-        ]
-    }
-    
-    # Pick a response based on context and round
-    available_responses = responses.get(context, responses['general'])
-    ai_response = available_responses[round_num % len(available_responses)]
+    ai_response = get_llm_response(text, round_num, context)
     
     return jsonify({
         'polarity': polarity,
-        'subjectivity': subjectivity,
         'music_params': music_params,
         'ai_response': ai_response,
         'regional_data': REGIONAL_SENTIMENT
