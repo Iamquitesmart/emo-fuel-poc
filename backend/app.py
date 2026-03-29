@@ -19,6 +19,11 @@ try:
 except LookupError:
     nltk.download('punkt', download_dir=nltk_data_path)
 
+try:
+    nltk.data.find('taggers/averaged_perceptron_tagger', paths=[nltk_data_path])
+except LookupError:
+    nltk.download('averaged_perceptron_tagger', download_dir=nltk_data_path)
+
 # Setup directories
 base_dir = os.path.abspath(os.path.dirname(__file__))
 # Correct template path for Vercel
