@@ -29,6 +29,12 @@ except LookupError:
 base_dir = os.path.abspath(os.path.dirname(__file__))
 # Correct template path for Vercel
 template_dir = os.path.join(os.path.dirname(base_dir), 'frontend', 'templates')
+
+# Log for Vercel debugging
+print(f"Base Dir: {base_dir}")
+print(f"Template Dir: {template_dir}")
+print(f"Template Dir Exists: {os.path.exists(template_dir)}")
+
 # Vercel is read-only except for /tmp
 if os.environ.get('VERCEL'):
     db_path = '/tmp/emo.db'
