@@ -66,4 +66,4 @@ EMO.LAB 是一个沉浸式的心理觉察与生成式音乐实验室。通过 5 
 - **冷启动优化**：采用 `Lazy Initialization` 模式，确保 Vercel 不会因下载资源而超时。
 
 ---
-Designed for **EMO.SOUL Project**. Created with ❤️ for your interview demonstration.
+Designed for **EMO.SOUL Project**. Created with ❤️ for lonely souls.
