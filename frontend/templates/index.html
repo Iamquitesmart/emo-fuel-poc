@@ -246,11 +246,12 @@
         let currentRound = 0;
         let totalEnergy = 0;
         let currentChords = [];
-        let fullHistory = [];
+        let fullHistory = []; // Objects: {user: "", ai: ""}
         let lastAIResponse = "";
         let weatherType = 'clear';
         let synth, pad, reverb;
         let isMuted = false;
+        let currentMelodyParams = null;
 
         // Audio Setup
         async function setupAudio(genre) {
@@ -291,7 +292,8 @@
             if (!text || currentRound >= 10) return;
 
             currentRound++;
-            fullHistory.push(text);
+            // Temporary entry, will be updated with AI response
+            fullHistory.push({user: text, ai: ""});
             updateProgress();
             addMessage(text, 'self-end glass text-white');
             input.value = '';
@@ -302,10 +304,18 @@
             history.scrollTop = history.scrollHeight;
 
             try {
+                // Prepare history for LLM
+                const historyForAPI = fullHistory.map(h => ({user: h.user, ai: h.ai}));
+                
                 const res = await fetch('/api/analyze', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({text, round: currentRound, genre: genre})
+                    body: JSON.stringify({
+                        text, 
+                        round: currentRound, 
+                        genre: genre,
+                        history: historyForAPI
+                    })
                 });
                 const data = await res.json();
                 
@@ -359,6 +369,11 @@
         }
 
         async function handleAIResponse(data) {
+            // Update history with AI response
+            if (fullHistory.length > 0) {
+                fullHistory[fullHistory.length - 1].ai = data.ai_response;
+            }
+
             // Energy animation
             const gain = Math.round(data.music_params.energy_gain);
             totalEnergy += gain;
@@ -368,6 +383,7 @@
             // Music
             await setupAudio(data.music_params.genre);
             currentChords.push(data.music_params.new_chord);
+            currentMelodyParams = data.music_params.melody; // Update melody params
             playEvolvingMusic(data.music_params);
 
             // AI Text
@@ -383,18 +399,32 @@
             Tone.Transport.cancel();
             Tone.Transport.bpm.value = params.tempo;
 
-            let idx = 0;
+            let chordIdx = 0;
             const loop = new Tone.Loop(time => {
-                // Play ALL accumulated chords in sequence
-                const chord = currentChords[idx % currentChords.length];
+                // Play chords (1 bar each)
+                const chord = currentChords[chordIdx % currentChords.length];
                 pad.triggerAttackRelease(chord, '1n', time);
-                
-                // Add lead melody based on current round's chord
-                const note = chord[Math.floor(Math.random() * chord.length)];
-                synth.triggerAttackRelease(note, '4n', time + Tone.Time('4n').toSeconds());
-                
-                idx++;
+                chordIdx++;
             }, '1n').start(0);
+
+            // Lead Melody Loop (P2 Upgrade)
+            const melodyLoop = new Tone.Loop(time => {
+                if (!currentMelodyParams) return;
+                
+                // Probability of playing a note based on rhythm density
+                if (Math.random() < currentMelodyParams.rhythm_density) {
+                    const chord = currentChords[currentChords.length - 1]; // Current mood's chord
+                    const m = currentMelodyParams;
+                    
+                    // Select a note from the chord and apply pitch offset
+                    let note = chord[Math.floor(Math.random() * chord.length)];
+                    
+                    // Random expressivity factor
+                    const velocity = 0.5 + (Math.random() * m.expressivity * 0.5);
+                    
+                    synth.triggerAttackRelease(note, m.note_length, time, velocity);
+                }
+            }, '8n').start(0);
 
             Tone.Transport.start();
         }
@@ -408,8 +438,8 @@
         async function saveSession() {
             const genre = document.getElementById('genre-select').value;
             const payload = {
-                text: fullHistory[fullHistory.length - 1],
-                full_history: fullHistory,
+                text: fullHistory[fullHistory.length - 1].user,
+                full_history: fullHistory.map(h => h.user),
                 total_energy: totalEnergy,
                 summary: lastAIResponse,
                 music_params: {

@@ -113,7 +113,7 @@ import requests
 # LLM Config (Optional: User can set GROQ_API_KEY in Vercel/Local)
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 
-def get_llm_response(user_text, round_num, context):
+def get_llm_response(user_text, round_num, context, chat_history=[]):
     if not GROQ_API_KEY:
         # Fallback to a much smarter rule-based counselor if no API key
         return f"第 {round_num} 轮：我深刻理解这种 {context} 的感受。在这一步，我们让和弦更加深沉。你能谈谈这背后的具体瞬间吗？"
@@ -121,15 +121,30 @@ def get_llm_response(user_text, round_num, context):
     try:
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-        prompt = f"你是一位高级心理咨询师。用户正在参与一个‘情绪燃料实验’。这是第{round_num}轮对话。用户的情绪关键词是{context}。用户的输入是：‘{user_text}’。请用一段充满共情、富有诗意且专业的中文回复（50字以内），引导用户继续深入探索。"
+        
+        # Build messages with history for context-awareness
+        messages = [
+            {"role": "system", "content": "你是一位富有共情力的资深心理咨询师，语言优美、含蓄且具有诗意。你正在引导用户进行‘情绪燃料实验’，将用户的情感转化为音乐和能源。你需要记住之前的对话内容，让回复具有连贯性和深度。"}
+        ]
+        
+        # Add history (limit to last 4 turns to keep context manageable)
+        for turn in chat_history[-4:]:
+            messages.append({"role": "user", "content": turn['user']})
+            messages.append({"role": "assistant", "content": turn['ai']})
+            
+        # Add current user input
+        messages.append({"role": "user", "content": f"当前是第{round_num}轮对话。当前情绪背景是{context}。用户说：‘{user_text}’。请给出一个极其专业且充满共鸣的简短回复（50字以内）。"})
+        
         data = {
             "model": "llama-3-8b-8192",
-            "messages": [{"role": "system", "content": "你是一位富有共情力的心理咨询师，语言优美且具有深度。"}, {"role": "user", "content": prompt}],
-            "max_tokens": 100
+            "messages": messages,
+            "max_tokens": 150,
+            "temperature": 0.7
         }
-        res = requests.post(url, headers=headers, json=data, timeout=5)
+        res = requests.post(url, headers=headers, json=data, timeout=7)
         return res.json()['choices'][0]['message']['content']
     except Exception as e:
+        print(f"LLM Error: {e}")
         return f"第 {round_num} 轮：情感的波动已被捕捉。这一步的和弦充满了共鸣，请继续分享你的感受。"
 
 # Music Theory Mappings
@@ -140,10 +155,10 @@ GENRES = {
 }
 
 SCALES = {
-    'bright': ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'], # C Major
-    'peaceful': ['F3', 'G3', 'A3', 'Bb3', 'C4', 'D4', 'E4'], # F Major/Lydian
-    'nostalgic': ['A3', 'B3', 'C4', 'D4', 'E4', 'F4', 'G4'], # A Minor
-    'intense': ['D3', 'Eb3', 'F3', 'G3', 'A3', 'Bb3', 'C4'] # D Phrygian
+    'bright': ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5', 'D5'], # C Major
+    'peaceful': ['F3', 'G3', 'A3', 'Bb3', 'C4', 'D4', 'E4', 'F4', 'G4'], # F Major/Lydian
+    'nostalgic': ['A3', 'B3', 'C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'], # A Minor
+    'intense': ['D3', 'Eb3', 'F3', 'G3', 'A3', 'Bb3', 'C4', 'D4', 'Eb4'] # D Phrygian
 }
 
 @app.route('/api/analyze', methods=['POST'])
@@ -152,6 +167,7 @@ def analyze_sentiment():
     text = data.get('text', '').lower()
     round_num = data.get('round', 1)
     genre = data.get('genre', 'ambient')
+    chat_history = data.get('history', []) # Expecting list of {user: "", ai: ""}
     
     if not text:
         return jsonify({'error': 'No text provided'}), 400
@@ -176,7 +192,6 @@ def analyze_sentiment():
     scale = SCALES[mode]
     
     # Chord Progression Logic: Progressive addition
-    # Progression: I -> IV -> V -> vi -> IV -> I -> ...
     progression_indices = [0, 3, 4, 5, 3, 0, 1, 4]
     base_idx = progression_indices[(round_num - 1) % len(progression_indices)]
     
@@ -186,18 +201,31 @@ def analyze_sentiment():
     fifth = scale[(base_idx + 4) % len(scale)]
     chord = [root, third, fifth]
 
+    # Melody Generation Params (P2 Upgrade)
+    # Higher polarity = higher pitch notes, faster rhythm
+    # Higher subjectivity = more random/expressive note selection
+    melody_params = {
+        'root_index': base_idx,
+        'pitch_offset': int(polarity * 3), # Shift up/down based on mood
+        'rhythm_density': 0.3 + (abs(polarity) * 0.5), # More mood = more notes
+        'note_length': '4n' if abs(polarity) < 0.5 else '8n', # Fast notes for intense mood
+        'expressivity': subjectivity # Used for velocity randomness
+    }
+
     music_params = {
         'tempo': GENRES[genre]['tempo'][0] + (polarity * 10),
         'new_chord': chord,
         'mode': mode,
         'genre': genre,
-        'energy_gain': abs(polarity) * 15 + 10 
+        'energy_gain': abs(polarity) * 15 + 10,
+        'melody': melody_params
     }
     
-    ai_response = get_llm_response(text, round_num, context)
+    ai_response = get_llm_response(text, round_num, context, chat_history)
     
     return jsonify({
         'polarity': polarity,
+        'subjectivity': subjectivity,
         'music_params': music_params,
         'ai_response': ai_response,
         'regional_data': REGIONAL_SENTIMENT
