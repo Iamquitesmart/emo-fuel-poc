@@ -115,8 +115,7 @@ GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 
 def get_llm_response(user_text, round_num, context, chat_history=[]):
     if not GROQ_API_KEY:
-        # Fallback to a much smarter rule-based counselor if no API key
-        return f"第 {round_num} 轮：我深刻理解这种 {context} 的感受。在这一步，我们让和弦更加深沉。你能谈谈这背后的具体瞬间吗？"
+        return f"作为你的心理陪伴者，我能感受到你此刻的{context}。这第 {round_num} 轮的旋律中，我为你加入了一丝深沉的基调。你能再深入聊聊那个让你产生这种感觉的具体瞬间吗？"
     
     try:
         url = "https://api.groq.com/openai/v1/chat/completions"
@@ -124,30 +123,41 @@ def get_llm_response(user_text, round_num, context, chat_history=[]):
         
         # Build messages with history for context-awareness
         messages = [
-            {"role": "system", "content": "你是一位富有共情力的资深心理咨询师，语言优美、含蓄且具有诗意。你正在引导用户进行‘情绪燃料实验’，将用户的情感转化为音乐和能源。你需要记住之前的对话内容，让回复具有连贯性和深度。"}
+            {
+                "role": "system", 
+                "content": (
+                    "你是一位融合了人本主义和存在主义流派的高级心理咨询师。你的语言风格：专业、温暖、充满洞察力、富有诗意且精炼。 "
+                    "你正在引导用户进行‘情绪燃料实验’。你的任务是通过对话： "
+                    "1. 展现极高的共情能力，精准捕捉用户言语背后的情感色彩。 "
+                    "2. 运用‘内容反应’和‘情感反应’技术，让用户感到被深度理解。 "
+                    "3. 语言要像深夜的耳语，含蓄而有力量，避免机械的套路话。 "
+                    "4. 必须记住之前的对话，保持逻辑连贯，像真正的心理医生一样引导用户觉察自我。 "
+                    "5. 每次回复严控在 60 字以内。"
+                )
+            }
         ]
         
-        # Add history (limit to last 4 turns to keep context manageable)
+        # Add history (limit to last 4 turns)
         for turn in chat_history[-4:]:
             messages.append({"role": "user", "content": turn['user']})
             messages.append({"role": "assistant", "content": turn['ai']})
             
         # Add current user input
-        messages.append({"role": "user", "content": f"当前是第{round_num}轮对话。当前情绪背景是{context}。用户说：‘{user_text}’。请给出一个极其专业且充满共鸣的简短回复（50字以内）。"})
+        messages.append({"role": "user", "content": f"对话轮次：{round_num}/5。情绪背景：{context}。用户说：‘{user_text}’。请以心理咨询师的身份给出回应。"})
         
         data = {
             "model": "llama-3-8b-8192",
             "messages": messages,
             "max_tokens": 150,
-            "temperature": 0.7
+            "temperature": 0.8
         }
         res = requests.post(url, headers=headers, json=data, timeout=7)
         return res.json()['choices'][0]['message']['content']
     except Exception as e:
         print(f"LLM Error: {e}")
-        return f"第 {round_num} 轮：情感的波动已被捕捉。这一步的和弦充满了共鸣，请继续分享你的感受。"
+        return f"我听到了。在这一轮的波动中，旋律变得更加宽广。请继续告诉我，那对你意味着什么？"
 
-# Music Theory Mappings
+# Music Theory Mappings (P3: 7th and 9th chords)
 GENRES = {
     'ambient': {'tempo': [60, 80], 'synth': 'sine', 'reverb': 0.8},
     'lo-fi': {'tempo': [80, 95], 'synth': 'triangle', 'reverb': 0.4},
@@ -155,10 +165,10 @@ GENRES = {
 }
 
 SCALES = {
-    'bright': ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5', 'D5'], # C Major
-    'peaceful': ['F3', 'G3', 'A3', 'Bb3', 'C4', 'D4', 'E4', 'F4', 'G4'], # F Major/Lydian
-    'nostalgic': ['A3', 'B3', 'C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'], # A Minor
-    'intense': ['D3', 'Eb3', 'F3', 'G3', 'A3', 'Bb3', 'C4', 'D4', 'Eb4'] # D Phrygian
+    'bright': ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5', 'D5', 'E5'], # C Major
+    'peaceful': ['F3', 'G3', 'A3', 'Bb3', 'C4', 'D4', 'E4', 'F4', 'G4', 'A4'], # F Major/Lydian
+    'nostalgic': ['A3', 'B3', 'C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5'], # A Minor
+    'intense': ['D3', 'Eb3', 'F3', 'G3', 'A3', 'Bb3', 'C4', 'D4', 'Eb4', 'F4'] # D Phrygian
 }
 
 @app.route('/api/analyze', methods=['POST'])
@@ -167,7 +177,7 @@ def analyze_sentiment():
     text = data.get('text', '').lower()
     round_num = data.get('round', 1)
     genre = data.get('genre', 'ambient')
-    chat_history = data.get('history', []) # Expecting list of {user: "", ai: ""}
+    chat_history = data.get('history', [])
     
     if not text:
         return jsonify({'error': 'No text provided'}), 400
@@ -195,11 +205,18 @@ def analyze_sentiment():
     progression_indices = [0, 3, 4, 5, 3, 0, 1, 4]
     base_idx = progression_indices[(round_num - 1) % len(progression_indices)]
     
-    # Construct a chord (Triad) from the scale
+    # Construct a complex chord (7th or 9th)
     root = scale[base_idx]
     third = scale[(base_idx + 2) % len(scale)]
     fifth = scale[(base_idx + 4) % len(scale)]
-    chord = [root, third, fifth]
+    seventh = scale[(base_idx + 6) % len(scale)]
+    ninth = scale[(base_idx + 8) % len(scale)]
+    
+    # Add notes based on round complexity
+    if round_num < 3:
+        chord = [root, third, fifth, seventh]
+    else:
+        chord = [root, third, fifth, seventh, ninth]
 
     # Melody Generation Params (P2 Upgrade)
     # Higher polarity = higher pitch notes, faster rhythm

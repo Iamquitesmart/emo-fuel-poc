@@ -80,6 +80,21 @@
             box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
         }
 
+        /* Ripple Effect */
+        .ripple {
+            position: fixed;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            pointer-events: none;
+            z-index: 100;
+            animation: ripple-anim 2s ease-out forwards;
+        }
+
+        @keyframes ripple-anim {
+            from { transform: scale(0); opacity: 0.8; }
+            to { transform: scale(3); opacity: 0; }
+        }
+
         .energy-bolt {
             position: fixed;
             top: 50%;
@@ -153,7 +168,7 @@
     <!-- Progress Indicator -->
     <div class="progress-container">
         <div class="progress-bar" id="main-progress"></div>
-        <div class="text-[10px] text-center mt-2 opacity-40 uppercase tracking-widest">和弦构造进度: <span id="round-text">0</span>/10</div>
+        <div class="text-[10px] text-center mt-2 opacity-40 uppercase tracking-widest">和弦构造进度: <span id="round-text">0</span>/5</div>
     </div>
 
     <!-- Global Map UI -->
@@ -168,7 +183,7 @@
     <main class="h-screen flex flex-col justify-end px-6 pb-24 max-w-4xl mx-auto relative z-20">
         <div id="chat-history" class="overflow-y-auto mb-8 pr-4 flex flex-col scroll-smooth h-[60vh]">
             <div class="chat-bubble glass self-start text-white/80">
-                [系统初始化完毕] 欢迎进入情绪燃料实验室。我们将通过 10 轮深度觉察对话，将你的情绪波长转化为复合和弦音轨与数字能源。
+                [系统初始化完毕] 欢迎进入情绪燃料实验室。我们将通过 5 轮深度觉察对话，将你的情绪波长转化为复合和弦音轨与数字能源。
             </div>
         </div>
 
@@ -196,7 +211,7 @@
             </div>
             <div>
                 <h2 class="text-3xl font-bold mb-2">情绪曲谱已生成</h2>
-                <p class="text-white/40 text-sm">已累积 10 组复合和弦，总计转化能量:</p>
+                <p class="text-white/40 text-sm">已累积 5 组复合和弦，总计转化能量:</p>
                 <div class="text-5xl font-bold text-blue-400 mt-4" id="final-energy">0 kW</div>
             </div>
             <button id="mint-btn" class="w-full py-4 bg-white text-black rounded-2xl font-bold hover:scale-105 transition-transform">
@@ -244,19 +259,19 @@
 
         // State
         let currentRound = 0;
+        const TOTAL_ROUNDS = 5;
         let totalEnergy = 0;
         let currentChords = [];
         let fullHistory = []; // Objects: {user: "", ai: ""}
         let lastAIResponse = "";
         let weatherType = 'clear';
-        let synth, pad, reverb;
+        let synth, pad, reverb, delay;
         let isMuted = false;
         let currentMelodyParams = null;
 
         // Audio Setup
         async function setupAudio(genre) {
             if (synth) {
-                // Update synth based on genre if already exists
                 const synthType = genre === 'lo-fi' ? 'triangle' : (genre === 'cinematic' ? 'sawtooth' : 'sine');
                 pad.set({ oscillator: { type: synthType } });
                 return;
@@ -264,19 +279,20 @@
             
             await Tone.start();
             reverb = new Tone.Reverb({ decay: 6, wet: 0.6 }).toDestination();
+            delay = new Tone.FeedbackDelay("8n", 0.5).connect(reverb);
             
             const synthType = genre === 'lo-fi' ? 'triangle' : (genre === 'cinematic' ? 'sawtooth' : 'sine');
             
             pad = new Tone.PolySynth(Tone.Synth, {
                 oscillator: { type: synthType },
                 envelope: { attack: 3, decay: 1, sustain: 1, release: 5 }
-            }).connect(reverb);
+            }).connect(delay);
             pad.volume.value = -25;
             
             synth = new Tone.MonoSynth({
                 oscillator: { type: 'sine' },
                 envelope: { attack: 0.5, release: 2 }
-            }).connect(reverb);
+            }).connect(delay);
             synth.volume.value = -20;
         }
 
@@ -286,10 +302,12 @@
         const history = document.getElementById('chat-history');
         const typing = document.getElementById('typing-indicator');
 
-        sendBtn.addEventListener('click', async () => {
+        sendBtn.addEventListener('click', async (e) => {
             const text = input.value.trim();
             const genre = document.getElementById('genre-select').value;
-            if (!text || currentRound >= 10) return;
+            if (!text || currentRound >= TOTAL_ROUNDS) return;
+
+            createRipple(e.clientX, e.clientY);
 
             currentRound++;
             // Temporary entry, will be updated with AI response
@@ -327,22 +345,36 @@
                 }, 1200);
                 
                 updateGlobalMap(data.regional_data);
-            } catch (e) {
-                console.error(e);
+            } catch (err) {
+                console.error(err);
                 typing.classList.add('hidden');
             } finally {
-                if (currentRound < 10) sendBtn.disabled = false;
+                if (currentRound < TOTAL_ROUNDS) sendBtn.disabled = false;
             }
         });
+
+        function createRipple(x, y) {
+            const ripple = document.createElement('div');
+            ripple.className = 'ripple';
+            ripple.style.left = `${x}px`;
+            ripple.style.top = `${y}px`;
+            ripple.style.width = '200px';
+            ripple.style.height = '200px';
+            ripple.style.marginLeft = '-100px';
+            ripple.style.marginTop = '-100px';
+            document.body.appendChild(ripple);
+            setTimeout(() => ripple.remove(), 2000);
+        }
 
         function applyModeVisuals(mode) {
             const overlay = document.querySelector('.overlay');
             const colors = {
-                intense: 'rgba(255, 0, 0, 0.2)',
-                nostalgic: 'rgba(100, 100, 255, 0.2)',
-                bright: 'rgba(255, 255, 100, 0.1)',
+                intense: 'rgba(255, 0, 0, 0.4)',
+                nostalgic: 'rgba(100, 100, 255, 0.3)',
+                bright: 'rgba(255, 255, 100, 0.2)',
                 peaceful: 'rgba(0, 0, 0, 0.9)'
             };
+            overlay.style.transition = 'background 2s ease';
             overlay.style.background = `radial-gradient(circle at center, transparent, ${colors[mode] || colors.peaceful})`;
             
             // Flash effect for intense
@@ -356,7 +388,7 @@
 
         function updateProgress() {
             const bar = document.getElementById('main-progress');
-            bar.style.width = `${currentRound * 10}%`;
+            bar.style.width = `${(currentRound / TOTAL_ROUNDS) * 100}%`;
             document.getElementById('round-text').innerText = currentRound;
         }
 
@@ -390,7 +422,7 @@
             lastAIResponse = data.ai_response;
             setTimeout(() => {
                 addMessage(data.ai_response, 'self-start glass text-blue-200 border-l-2 border-blue-500/50');
-                if (currentRound >= 10) showFinalCard();
+                if (currentRound >= TOTAL_ROUNDS) showFinalCard();
             }, 800);
         }
 
