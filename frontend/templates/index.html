@@ -186,7 +186,7 @@
 
     <!-- Final Token Card -->
     <div id="final-card" class="fixed inset-0 flex items-center justify-center bg-black/80 z-[200] hidden">
-        <div class="glass p-12 rounded-[40px] text-center max-w-md space-y-8 scale-90 animate-in fade-in zoom-in duration-500">
+        <div id="mint-initial-view" class="glass p-12 rounded-[40px] text-center max-w-md space-y-8 scale-90 animate-in fade-in zoom-in duration-500">
             <div class="w-24 h-24 bg-blue-500/20 rounded-full mx-auto flex items-center justify-center text-blue-400">
                 <i data-lucide="zap" class="w-12 h-12 fill-current"></i>
             </div>
@@ -200,6 +200,37 @@
             </button>
             <button onclick="location.reload()" class="text-xs text-white/20 hover:text-white transition-colors uppercase tracking-widest">
                 重新开启实验
+            </button>
+        </div>
+
+        <!-- Pre-sale / Fake Door View -->
+        <div id="mint-presale-view" class="hidden glass p-12 rounded-[40px] text-center max-w-md space-y-8">
+            <div class="w-24 h-24 bg-green-500/20 rounded-full mx-auto flex items-center justify-center text-green-400">
+                <i data-lucide="rocket" class="w-12 h-12"></i>
+            </div>
+            <div>
+                <h2 class="text-3xl font-bold mb-2">锁定创世资格</h2>
+                <p class="text-white/40 text-sm">Token 铸造功能即将上线。现在预付 <span class="text-white font-bold">1 元</span> 即可锁定首批创世资格，并享受永久 5 折铸造费用。</p>
+            </div>
+            <button id="presale-btn" class="w-full py-4 bg-green-500 text-black rounded-2xl font-bold hover:scale-105 transition-transform">
+                立即预定 (¥1.00)
+            </button>
+            <button id="cancel-presale-btn" class="text-xs text-white/20 hover:text-white transition-colors uppercase tracking-widest">
+                稍后再说
+            </button>
+        </div>
+
+        <!-- Thank You View -->
+        <div id="mint-thanks-view" class="hidden glass p-12 rounded-[40px] text-center max-w-md space-y-8">
+            <div class="w-24 h-24 bg-purple-500/20 rounded-full mx-auto flex items-center justify-center text-purple-400">
+                <i data-lucide="party-popper" class="w-12 h-12"></i>
+            </div>
+            <div>
+                <h2 class="text-3xl font-bold mb-2">感谢您的支持！</h2>
+                <p class="text-white/40 text-sm">您已成功锁定创世资格！我们将在功能上线后第一时间通过系统通知您。</p>
+            </div>
+            <button onclick="location.reload()" class="w-full py-4 bg-purple-500 text-black rounded-2xl font-bold hover:scale-105 transition-transform">
+                开启新的实验
             </button>
         </div>
     </div>
@@ -451,6 +482,30 @@
             document.getElementById('mute-icon').setAttribute('data-lucide', isMuted ? 'volume-x' : 'volume-2');
             lucide.createIcons();
         }
+
+        // Event Listeners for Fake Door Test
+        const mintBtn = document.getElementById('mint-btn');
+        const presaleBtn = document.getElementById('presale-btn');
+        const cancelBtn = document.getElementById('cancel-presale-btn');
+
+        mintBtn.addEventListener('click', () => {
+            document.getElementById('mint-initial-view').classList.add('hidden');
+            document.getElementById('mint-presale-view').classList.remove('hidden');
+        });
+
+        presaleBtn.addEventListener('click', () => {
+            // Here you would normally trigger a payment gateway.
+            // For our test, we just log this intent.
+            console.log('PAYMENT_INTENT: User clicked pre-sale button.');
+            
+            document.getElementById('mint-presale-view').classList.add('hidden');
+            document.getElementById('mint-thanks-view').classList.remove('hidden');
+        });
+
+        cancelBtn.addEventListener('click', () => {
+            document.getElementById('mint-presale-view').classList.add('hidden');
+            document.getElementById('mint-initial-view').classList.remove('hidden');
+        });
 
         // Initial Map Load
         fetch('/api/global_sentiment').then(r => r.json()).then(updateGlobalMap);
