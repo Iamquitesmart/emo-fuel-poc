@@ -74,6 +74,13 @@ class MusicToken(db.Model):
     owner = db.Column(db.String(50), default='Original Artist')
     is_for_sale = db.Column(db.Boolean, default=True)
 
+class PaymentIntent(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    amount = db.Column(db.Float, default=1.0)
+    token_id = db.Column(db.Integer, db.ForeignKey('music_token.id'))
+    status = db.Column(db.String(20), default='intent_clicked')
+
 # Routes
 @app.route('/api/health')
 def health():
@@ -322,6 +329,23 @@ def buy_token():
         db.session.commit()
         return jsonify({'status': 'purchased', 'token_id': token_id})
     return jsonify({'error': 'Token not found'}), 404
+
+@app.route('/api/record_intent', methods=['POST'])
+def record_intent():
+    data = request.json
+    new_intent = PaymentIntent(
+        token_id=data.get('token_id'),
+        amount=data.get('amount', 1.0),
+        status='intent_confirmed'
+    )
+    db.session.add(new_intent)
+    db.session.commit()
+    
+    # In a real app, this is where we'd trigger a 402 Payment Required or Mock Payment
+    return jsonify({
+        'status': 'intent_recorded',
+        'message': 'We are currently in a high-fidelity validation phase. No real money has been charged.'
+    })
 
 @app.route('/api/vault', methods=['GET'])
 def get_vault():
