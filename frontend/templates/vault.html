@@ -37,6 +37,25 @@
             box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
         }
 
+        .locked-capsule {
+            filter: blur(8px);
+            pointer-events: none;
+            user-select: none;
+            opacity: 0.5;
+        }
+
+        .capsule-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.4);
+            border-radius: 32px;
+            z-index: 10;
+        }
+
         @keyframes pulse {
             0% { opacity: 0.4; }
             50% { opacity: 1; }
@@ -115,32 +134,47 @@
                 const energy = params.total_energy || 0;
                 const summary = params.summary || "这是一段珍贵的情绪燃料。";
                 const genre = params.genre || "ambient";
+                const isLocked = token.is_locked;
+                const unlockDate = token.unlock_date;
+                const tags = token.ai_tags || [];
                 
                 return `
-                    <div class="glass p-8 rounded-[32px] fuel-card flex flex-col gap-6" id="card-${token.id}">
-                        <div class="flex justify-between items-start">
-                            <div class="text-[10px] uppercase tracking-widest text-white/40">${token.timestamp}</div>
-                            <div class="px-3 py-1 bg-blue-500/10 text-blue-400 rounded-full text-[10px] font-bold uppercase tracking-tighter">
-                                ${genre}
+                    <div class="relative group">
+                        ${isLocked ? `
+                            <div class="capsule-overlay">
+                                <i data-lucide="lock" class="w-8 h-8 text-white/40 mb-2"></i>
+                                <div class="text-[10px] text-white/60 uppercase tracking-widest">时空胶囊已锁定</div>
+                                <div class="text-[8px] text-blue-400 mt-1">解锁于: ${unlockDate}</div>
                             </div>
-                        </div>
-                        
-                        <div>
-                            <div class="text-3xl font-bold text-blue-400 mb-1">${energy} kW</div>
-                            <div class="text-[10px] text-white/20 uppercase tracking-widest">累计情感能源</div>
-                        </div>
+                        ` : ''}
+                        <div class="glass p-8 rounded-[32px] fuel-card flex flex-col gap-6 ${isLocked ? 'locked-capsule' : ''}" id="card-${token.id}">
+                            <div class="flex justify-between items-start">
+                                <div class="text-[10px] uppercase tracking-widest text-white/40">${token.timestamp}</div>
+                                <div class="flex gap-2">
+                                    ${tags.map(tag => `<span class="px-2 py-0.5 bg-white/5 text-white/40 rounded-md text-[8px]">${tag}</span>`).join('')}
+                                    <div class="px-3 py-1 bg-blue-500/10 text-blue-400 rounded-full text-[10px] font-bold uppercase tracking-tighter">
+                                        ${genre}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <div class="text-3xl font-bold text-blue-400 mb-1">${energy} kW</div>
+                                <div class="text-[10px] text-white/20 uppercase tracking-widest">累计情感能源</div>
+                            </div>
 
-                        <p class="text-sm text-white/60 leading-relaxed italic">
-                            "${summary}"
-                        </p>
+                            <p class="text-sm text-white/60 leading-relaxed italic">
+                                "${summary}"
+                            </p>
 
-                        <div class="mt-auto pt-4 flex items-center justify-between">
-                            <button onclick="togglePlay(${token.id}, ${JSON.stringify(params).replace(/"/g, '&quot;')})" 
-                                id="btn-${token.id}"
-                                class="w-12 h-12 bg-white text-black rounded-full flex items-center justify-center hover:scale-110 transition-transform active:scale-95 shadow-xl">
-                                <i data-lucide="play" id="icon-${token.id}" class="w-5 h-5 fill-current"></i>
-                            </button>
-                            <div class="text-[10px] font-mono text-white/20">#${token.token_hash.substring(0, 8)}</div>
+                            <div class="mt-auto pt-4 flex items-center justify-between">
+                                <button onclick="togglePlay(${token.id}, ${JSON.stringify(params).replace(/"/g, '&quot;')})" 
+                                    id="btn-${token.id}"
+                                    class="w-12 h-12 bg-white text-black rounded-full flex items-center justify-center hover:scale-110 transition-transform active:scale-95 shadow-xl">
+                                    <i data-lucide="play" id="icon-${token.id}" class="w-5 h-5 fill-current"></i>
+                                </button>
+                                <div class="text-[10px] font-mono text-white/20">#${token.token_hash.substring(0, 8)}</div>
+                            </div>
                         </div>
                     </div>
                 `;

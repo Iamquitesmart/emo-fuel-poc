@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timedelta
 from textblob import TextBlob
 import os
 import json
@@ -63,6 +63,9 @@ class DiaryEntry(db.Model):
     polarity = db.Column(db.Float)
     subjectivity = db.Column(db.Float)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    is_capsule = db.Column(db.Boolean, default=False)
+    unlock_date = db.Column(db.DateTime, nullable=True)
+    ai_tags = db.Column(db.String(100), default='Emotion') # Comma separated
     token = db.relationship('MusicToken', backref='entry', uselist=False)
 
 class MusicToken(db.Model):
@@ -145,7 +148,12 @@ def get_llm_response(user_text, round_num, context, chat_history=[], mode='exper
         )
 
         if mode == 'diary':
-            user_prompt = f"用户写下了一篇深夜日记：‘{user_text}’。情绪背景：{context}。请以心理咨询师的身份，给出一个充满洞察力、温暖且能引发自我觉察的‘深夜回响’回复。"
+            user_prompt = (
+                f"用户写下了一篇深夜日记：‘{user_text}’。情绪背景：{context}。 "
+                "请以心理咨询师的身份，给出一个充满洞察力、温暖且能引发自我觉察的‘深夜回响’回复。 "
+                "并以 JSON 格式附加在回复末尾（不要显示给用户，仅供机器读取）： "
+                "{\"tags\": [\"标签1\", \"标签2\"], \"visual_prompt\": \"一段描述唯美、艺术化视觉意象的英文短语，用于文生图\"}"
+            )
         else:
             user_prompt = f"对话轮次：{round_num}/5。情绪背景：{context}。用户说：‘{user_text}’。请以心理咨询师的身份给出回应。"
 
@@ -254,11 +262,28 @@ def analyze_sentiment():
     
     ai_response = get_llm_response(text, round_num, context, chat_history, mode=mode)
     
+    # Parse AI JSON if in diary mode
+    parsed_ai = {'text': ai_response, 'tags': ['深夜', '觉察'], 'visual_url': 'https://images.unsplash.com/photo-1518173946687-a4c8a9ba332f'}
+    if mode == 'diary' and '{' in ai_response:
+        try:
+            parts = ai_response.split('{')
+            text_part = parts[0].strip()
+            json_part = '{' + parts[1]
+            ai_data = json.loads(json_part)
+            parsed_ai['text'] = text_part
+            parsed_ai['tags'] = ai_data.get('tags', [])
+            v_prompt = ai_data.get('visual_prompt', 'calm sea night rain')
+            parsed_ai['visual_url'] = f"https://source.unsplash.com/1600x900/?{v_prompt.replace(' ', ',')}"
+        except:
+            pass
+
     return jsonify({
         'polarity': polarity,
         'subjectivity': subjectivity,
         'music_params': music_params,
-        'ai_response': ai_response,
+        'ai_response': parsed_ai['text'],
+        'ai_tags': parsed_ai['tags'],
+        'visual_url': parsed_ai['visual_url'],
         'regional_data': REGIONAL_SENTIMENT
     })
 
@@ -269,20 +294,27 @@ def get_global_sentiment():
 @app.route('/api/save', methods=['POST'])
 def save_entry():
     data = request.json
-    content = data.get('text', '') # The last round text
-    full_history = data.get('full_history', []) # List of all round texts
-    music_params = data.get('music_params', {}) # All chords, genre, etc.
+    content = data.get('text', '')
+    full_history = data.get('full_history', [])
+    music_params = data.get('music_params', {})
     total_energy = data.get('total_energy', 0)
     
-    # Analyze the overall sentiment from the whole history
+    # Capsule Data
+    is_capsule = data.get('is_capsule', False)
+    unlock_days = data.get('unlock_days', 0)
+    unlock_date = datetime.utcnow() + timedelta(days=unlock_days) if is_capsule else None
+    ai_tags = ",".join(data.get('ai_tags', ['Emotion']))
+
     combined_text = " ".join(full_history) if full_history else content
     analysis = TextBlob(combined_text)
     
-    # Create Diary Entry
     new_entry = DiaryEntry(
         content=combined_text,
         polarity=analysis.sentiment.polarity,
-        subjectivity=analysis.sentiment.subjectivity
+        subjectivity=analysis.sentiment.subjectivity,
+        is_capsule=is_capsule,
+        unlock_date=unlock_date,
+        ai_tags=ai_tags
     )
     db.session.add(new_entry)
     db.session.commit()
@@ -356,17 +388,25 @@ def record_intent():
 
 @app.route('/api/vault', methods=['GET'])
 def get_vault():
-    # In a real app, filter by user. Here we just show all created tokens.
+    now = datetime.utcnow()
     tokens = MusicToken.query.order_by(MusicToken.id.desc()).all()
     result = []
     for t in tokens:
+        # Check if it's a locked capsule
+        is_locked = False
+        if t.entry.is_capsule and t.entry.unlock_date > now:
+            is_locked = True
+        
         result.append({
             'id': t.id,
             'token_hash': t.token_hash,
             'price': t.price,
             'owner': t.owner,
             'music_params': json.loads(t.music_params),
-            'timestamp': t.entry.timestamp.strftime("%Y-%m-%d %H:%M")
+            'timestamp': t.entry.timestamp.strftime("%Y-%m-%d %H:%M"),
+            'is_locked': is_locked,
+            'unlock_date': t.entry.unlock_date.strftime("%Y-%m-%d %H:%M") if t.entry.unlock_date else None,
+            'ai_tags': t.entry.ai_tags.split(',') if t.entry.ai_tags else []
         })
     return jsonify(result)
 

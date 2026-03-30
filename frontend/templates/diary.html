@@ -43,13 +43,24 @@
             font-style: italic;
         }
 
-        /* Rain Canvas */
-        #rain-canvas {
+        /* Rain & Sea Canvas */
+        #visual-canvas {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none;
             z-index: -1;
-            opacity: 0.15;
+            opacity: 0.2;
+            transition: opacity 1s;
+        }
+
+        #generated-image {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -2;
+            object-fit: cover;
+            opacity: 0;
+            transition: opacity 3s ease;
+            filter: grayscale(0.5) brightness(0.3);
         }
 
         .fade-in {
@@ -67,7 +78,8 @@
     </style>
 </head>
 <body class="flex flex-col items-center justify-center p-8">
-    <canvas id="rain-canvas"></canvas>
+    <canvas id="visual-canvas"></canvas>
+    <img id="generated-image" src="" alt="AI Generated Emotion">
 
     <nav class="fixed top-0 left-0 w-full p-6 flex justify-between items-center z-50">
         <div class="flex items-center gap-3">
@@ -97,28 +109,55 @@
         <textarea id="diary-textarea" class="diary-input" placeholder="今晚，想写点什么..." autofocus></textarea>
 
         <div class="mt-12 flex justify-between items-center">
-            <div class="flex gap-4">
-                <button id="submit-btn" class="glass px-8 py-3 rounded-2xl text-sm hover:bg-white hover:text-black transition-all disabled:opacity-20 flex items-center gap-2">
-                    <i data-lucide="check" class="w-4 h-4"></i>
-                    完成日记
-                </button>
-                <button id="generate-music-btn" class="hidden glass px-8 py-3 rounded-2xl text-sm border-blue-500/30 text-blue-400 hover:bg-blue-500 hover:text-white transition-all flex items-center gap-2">
-                    <i data-lucide="music" class="w-4 h-4"></i>
-                    消耗 10 Token 生成今日旋律
-                </button>
+            <div class="flex flex-col gap-4">
+                <div class="flex items-center gap-6 mb-2">
+                    <label class="flex items-center gap-2 cursor-pointer group">
+                        <input type="checkbox" id="capsule-toggle" class="hidden">
+                        <div class="w-10 h-5 bg-white/10 rounded-full relative transition-colors group-hover:bg-white/20">
+                            <div id="toggle-dot" class="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-all"></div>
+                        </div>
+                        <span class="text-[10px] uppercase tracking-widest text-white/40">保存为时空胶囊</span>
+                    </label>
+                    
+                    <select id="unlock-select" class="hidden bg-white/5 border border-white/10 rounded-lg px-3 py-1 text-[10px] uppercase tracking-widest text-white/60 focus:outline-none focus:ring-1 focus:ring-blue-500/50">
+                        <option value="1">1 天后开启</option>
+                        <option value="7">1 周后开启</option>
+                        <option value="30">1 个月后开启</option>
+                        <option value="365">1 年后开启</option>
+                    </select>
+                </div>
+
+                <div class="flex gap-4">
+                    <button id="submit-btn" class="glass px-8 py-3 rounded-2xl text-sm hover:bg-white hover:text-black transition-all disabled:opacity-20 flex items-center gap-2">
+                        <i data-lucide="check" class="w-4 h-4"></i>
+                        完成日记
+                    </button>
+                    <button id="generate-music-btn" class="hidden glass px-8 py-3 rounded-2xl text-sm border-blue-500/30 text-blue-400 hover:bg-blue-500 hover:text-white transition-all flex items-center gap-2">
+                        <i data-lucide="music" class="w-4 h-4"></i>
+                        消耗 10 Token 生成今日旋律
+                    </button>
+                </div>
             </div>
             <div id="word-count" class="text-[10px] text-white/10 uppercase tracking-widest">0 词</div>
         </div>
 
         <!-- AI Response Section -->
         <div id="ai-feedback" class="hidden mt-12 p-8 glass rounded-[32px] border-l-4 border-blue-500/30">
-            <div class="text-[10px] text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                <i data-lucide="sparkles" class="w-3 h-3"></i>
-                深夜回响
+            <div class="flex justify-between items-start mb-4">
+                <div class="text-[10px] text-blue-400 uppercase tracking-widest flex items-center gap-2">
+                    <i data-lucide="sparkles" class="w-3 h-3"></i>
+                    深夜回响
+                </div>
+                <div id="ai-tags" class="flex gap-2">
+                    <!-- AI tags -->
+                </div>
             </div>
-            <p id="feedback-text" class="text-lg leading-relaxed italic text-white/70 font-serif">
+            <p id="feedback-text" class="text-lg leading-relaxed italic text-white/70 font-serif mb-6">
                 <!-- AI feedback goes here -->
             </p>
+            <div id="ai-visual" class="hidden rounded-2xl overflow-hidden border border-white/5 shadow-2xl">
+                <!-- AI Visual Preview will be handled by body background -->
+            </div>
         </div>
     </main>
 
@@ -212,10 +251,11 @@
             document.getElementById('submit-btn').disabled = words < 10;
         });
 
-        // Rain Animation
-        const canvas = document.getElementById('rain-canvas');
+        // Rain & Sea Animation
+        const canvas = document.getElementById('visual-canvas');
         const ctx = canvas.getContext('2d');
         let drops = [];
+        let waves = [];
 
         function resize() {
             canvas.width = window.innerWidth;
@@ -237,7 +277,7 @@
                 if (this.y > canvas.height) this.reset();
             }
             draw() {
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
                 ctx.beginPath();
                 ctx.moveTo(this.x, this.y);
                 ctx.lineTo(this.x, this.y + this.len);
@@ -245,31 +285,72 @@
             }
         }
 
+        class Wave {
+            constructor(y, amplitude, length, speed) {
+                this.y = y;
+                this.amplitude = amplitude;
+                this.length = length;
+                this.speed = speed;
+                this.offset = Math.random() * 100;
+            }
+            update() {
+                this.offset += this.speed;
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.moveTo(0, this.y);
+                for (let x = 0; x < canvas.width; x++) {
+                    const dy = Math.sin(x / this.length + this.offset) * this.amplitude;
+                    ctx.lineTo(x, this.y + dy);
+                }
+                ctx.lineTo(canvas.width, canvas.height);
+                ctx.lineTo(0, canvas.height);
+                ctx.fillStyle = 'rgba(59, 130, 246, 0.03)';
+                ctx.fill();
+            }
+        }
+
         for(let i=0; i<60; i++) drops.push(new Drop());
+        waves.push(new Wave(canvas.height * 0.7, 20, 100, 0.02));
+        waves.push(new Wave(canvas.height * 0.8, 15, 150, 0.015));
 
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            waves.forEach(w => { w.update(); w.draw(); });
             drops.forEach(d => { d.update(); d.draw(); });
             requestAnimationFrame(animate);
         }
         animate();
+
+        // Capsule Toggle
+        const capsuleToggle = document.getElementById('capsule-toggle');
+        const unlockSelect = document.getElementById('unlock-select');
+        const toggleDot = document.getElementById('toggle-dot');
+
+        capsuleToggle.addEventListener('change', () => {
+            const isChecked = capsuleToggle.checked;
+            unlockSelect.classList.toggle('hidden', !isChecked);
+            toggleDot.style.left = isChecked ? 'calc(100% - 16px)' : '4px';
+            toggleDot.style.background = isChecked ? '#3b82f6' : 'white';
+        });
 
         // Submission Logic
         const submitBtn = document.getElementById('submit-btn');
         const musicBtn = document.getElementById('generate-music-btn');
         const feedbackSection = document.getElementById('ai-feedback');
         const feedbackText = document.getElementById('feedback-text');
+        const aiTagsContainer = document.getElementById('ai-tags');
+        const genImg = document.getElementById('generated-image');
 
         submitBtn.addEventListener('click', async () => {
             const text = textarea.value.trim();
             if (!text) return;
 
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> 正在聆听...';
+            submitBtn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> 正在聆听并记录...';
             lucide.createIcons();
 
             try {
-                // Call the existing analyze API for sentiment and AI feedback
                 const res = await fetch('/api/analyze', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -283,15 +364,24 @@
                 });
                 const data = await res.json();
 
-                // Show AI feedback
+                // Show AI feedback & Image
                 feedbackSection.classList.remove('hidden');
                 feedbackText.innerText = data.ai_response;
+                
+                // Show Tags
+                aiTagsContainer.innerHTML = data.ai_tags.map(tag => `
+                    <span class="px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded-md text-[8px] border border-blue-500/20">${tag}</span>
+                `).join('');
+
+                // Show AI Generated Image
+                genImg.src = data.visual_url;
+                genImg.style.opacity = '1';
                 
                 // Transition buttons
                 submitBtn.classList.add('hidden');
                 musicBtn.classList.remove('hidden');
 
-                // Auto-save to vault/db
+                // Auto-save to vault/db with Capsule info
                 await fetch('/api/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -300,11 +390,14 @@
                         full_history: [text],
                         total_energy: Math.abs(data.polarity * 100),
                         summary: data.ai_response,
-                        music_params: data.music_params
+                        music_params: data.music_params,
+                        is_capsule: capsuleToggle.checked,
+                        unlock_days: parseInt(unlockSelect.value),
+                        ai_tags: data.ai_tags
                     })
                 });
 
-            } catch (e) {
+            } catch (err) {
                 console.error(err);
                 submitBtn.innerHTML = '完成日记';
             }
