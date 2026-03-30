@@ -125,6 +125,10 @@
         </div>
         
         <div class="flex gap-2">
+            <a href="/vault" class="weather-btn glass hover:bg-white hover:text-black flex items-center gap-2">
+                <i data-lucide="database" class="w-3 h-3"></i>
+                情绪燃料库
+            </a>
             <select id="genre-select" class="weather-btn glass appearance-none cursor-pointer">
                 <option value="ambient">曲风: Ambient</option>
                 <option value="lo-fi">曲风: Lo-Fi</option>
@@ -242,6 +246,8 @@
         let currentRound = 0;
         let totalEnergy = 0;
         let currentChords = [];
+        let fullHistory = [];
+        let lastAIResponse = "";
         let weatherType = 'clear';
         let synth, pad, reverb;
         let isMuted = false;
@@ -285,6 +291,7 @@
             if (!text || currentRound >= 10) return;
 
             currentRound++;
+            fullHistory.push(text);
             updateProgress();
             addMessage(text, 'self-end glass text-white');
             input.value = '';
@@ -364,6 +371,7 @@
             playEvolvingMusic(data.music_params);
 
             // AI Text
+            lastAIResponse = data.ai_response;
             setTimeout(() => {
                 addMessage(data.ai_response, 'self-start glass text-blue-200 border-l-2 border-blue-500/50');
                 if (currentRound >= 10) showFinalCard();
@@ -395,6 +403,33 @@
             const card = document.getElementById('final-card');
             card.classList.remove('hidden');
             document.getElementById('final-energy').innerText = `${totalEnergy} kW`;
+        }
+
+        async function saveSession() {
+            const genre = document.getElementById('genre-select').value;
+            const payload = {
+                text: fullHistory[fullHistory.length - 1],
+                full_history: fullHistory,
+                total_energy: totalEnergy,
+                summary: lastAIResponse,
+                music_params: {
+                    chords: currentChords,
+                    genre: genre,
+                    tempo: Tone.Transport.bpm.value
+                }
+            };
+            
+            try {
+                const res = await fetch('/api/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                return await res.json();
+            } catch (e) {
+                console.error("Save failed:", e);
+                return null;
+            }
         }
 
         // Global Map
@@ -488,14 +523,14 @@
         const presaleBtn = document.getElementById('presale-btn');
         const cancelBtn = document.getElementById('cancel-presale-btn');
 
-        mintBtn.addEventListener('click', () => {
+        mintBtn.addEventListener('click', async () => {
+            await saveSession();
             document.getElementById('mint-initial-view').classList.add('hidden');
             document.getElementById('mint-presale-view').classList.remove('hidden');
         });
 
-        presaleBtn.addEventListener('click', () => {
-            // Here you would normally trigger a payment gateway.
-            // For our test, we just log this intent.
+        presaleBtn.addEventListener('click', async () => {
+            // Already saved on mintBtn click, but we can update if needed.
             console.log('PAYMENT_INTENT: User clicked pre-sale button.');
             
             document.getElementById('mint-presale-view').classList.add('hidden');

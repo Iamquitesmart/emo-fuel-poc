@@ -88,6 +88,10 @@ def health():
 def index():
     return render_template('index.html')
 
+@app.route('/vault')
+def vault():
+    return render_template('vault.html')
+
 # Global/Mock Regional Sentiment Data
 REGIONAL_SENTIMENT = {
     'Asia': {'happiness': 0.7, 'sadness': 0.2, 'energy': 0.8},
@@ -206,26 +210,34 @@ def get_global_sentiment():
 @app.route('/api/save', methods=['POST'])
 def save_entry():
     data = request.json
-    content = data.get('text')
-    params = data.get('music_params')
+    content = data.get('text', '') # The last round text
+    full_history = data.get('full_history', []) # List of all round texts
+    music_params = data.get('music_params', {}) # All chords, genre, etc.
+    total_energy = data.get('total_energy', 0)
     
-    analysis = TextBlob(content)
+    # Analyze the overall sentiment from the whole history
+    combined_text = " ".join(full_history) if full_history else content
+    analysis = TextBlob(combined_text)
     
     # Create Diary Entry
     new_entry = DiaryEntry(
-        content=content,
+        content=combined_text,
         polarity=analysis.sentiment.polarity,
         subjectivity=analysis.sentiment.subjectivity
     )
     db.session.add(new_entry)
     db.session.commit()
     
+    # Add energy and summary to music_params for storage
+    music_params['total_energy'] = total_energy
+    music_params['summary'] = data.get('summary', '这是一段珍贵的情绪燃料。')
+    
     # Create Token
-    token_hash = hex(hash(content + str(datetime.now())))[2:]
+    token_hash = hex(hash(combined_text + str(datetime.now())))[2:]
     new_token = MusicToken(
         entry_id=new_entry.id,
         token_hash=token_hash,
-        music_params=json.dumps(params),
+        music_params=json.dumps(music_params),
         price=round(0.01 + abs(analysis.sentiment.polarity) * 0.1, 3)
     )
     db.session.add(new_token)

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EMO.SOUL - 情绪燃料库</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;700&family=Space+Grotesk:wght@300;500&display=swap');
+        
+        body {
+            font-family: 'Space Grotesk', 'Noto Serif SC', serif;
+            background: #000;
+            color: #fff;
+            min-height: 100vh;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .fuel-card {
+            transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+
+        .fuel-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+
+        .energy-glow {
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.4; }
+            50% { opacity: 1; }
+            100% { opacity: 0.4; }
+        }
+
+        .playing-indicator {
+            animation: pulse 1.5s infinite;
+        }
+    </style>
+</head>
+<body class="p-8">
+    <nav class="fixed top-0 left-0 w-full p-6 flex justify-between items-center z-50 glass border-b border-white/5">
+        <div class="flex items-center gap-3">
+            <i data-lucide="zap" class="w-6 h-6 text-blue-400 fill-blue-400"></i>
+            <span class="text-lg font-bold tracking-tighter uppercase">EMO.LAB / VAULT</span>
+        </div>
+        <a href="/" class="glass px-6 py-2 rounded-full text-sm hover:bg-white hover:text-black transition-all flex items-center gap-2">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            返回实验室
+        </a>
+    </nav>
+
+    <main class="mt-24 max-w-6xl mx-auto">
+        <header class="mb-12">
+            <h1 class="text-4xl font-bold mb-4 tracking-tight">情绪燃料库</h1>
+            <p class="text-white/40">这里珍藏着你每一次情绪转化的产物。每一份燃料都是一段独特的音频记忆。</p>
+        </header>
+
+        <div id="vault-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Loading State -->
+            <div class="col-span-full py-24 text-center text-white/20 italic">
+                正在同步情绪频率...
+            </div>
+        </div>
+    </main>
+
+    <script>
+        lucide.createIcons();
+
+        let synth, pad, reverb;
+        let currentPlayingId = null;
+
+        async function setupAudio() {
+            if (synth) return;
+            await Tone.start();
+            reverb = new Tone.Reverb({ decay: 6, wet: 0.6 }).toDestination();
+            pad = new Tone.PolySynth(Tone.Synth).connect(reverb);
+            pad.volume.value = -25;
+            synth = new Tone.MonoSynth({
+                oscillator: { type: 'sine' },
+                envelope: { attack: 0.5, release: 2 }
+            }).connect(reverb);
+            synth.volume.value = -20;
+        }
+
+        async function fetchVault() {
+            try {
+                const res = await fetch('/api/vault');
+                const tokens = await res.json();
+                renderVault(tokens);
+            } catch (e) {
+                console.error("Fetch vault failed:", e);
+            }
+        }
+
+        function renderVault(tokens) {
+            const grid = document.getElementById('vault-grid');
+            if (tokens.length === 0) {
+                grid.innerHTML = '<div class="col-span-full py-24 text-center text-white/20 italic">库中空空如也，去实验室转化一些情绪吧。</div>';
+                return;
+            }
+
+            grid.innerHTML = tokens.map(token => {
+                const params = token.music_params;
+                const energy = params.total_energy || 0;
+                const summary = params.summary || "这是一段珍贵的情绪燃料。";
+                const genre = params.genre || "ambient";
+                
+                return `
+                    <div class="glass p-8 rounded-[32px] fuel-card flex flex-col gap-6" id="card-${token.id}">
+                        <div class="flex justify-between items-start">
+                            <div class="text-[10px] uppercase tracking-widest text-white/40">${token.timestamp}</div>
+                            <div class="px-3 py-1 bg-blue-500/10 text-blue-400 rounded-full text-[10px] font-bold uppercase tracking-tighter">
+                                ${genre}
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <div class="text-3xl font-bold text-blue-400 mb-1">${energy} kW</div>
+                            <div class="text-[10px] text-white/20 uppercase tracking-widest">累计情感能源</div>
+                        </div>
+
+                        <p class="text-sm text-white/60 leading-relaxed italic">
+                            "${summary}"
+                        </p>
+
+                        <div class="mt-auto pt-4 flex items-center justify-between">
+                            <button onclick="togglePlay(${token.id}, ${JSON.stringify(params).replace(/"/g, '&quot;')})" 
+                                id="btn-${token.id}"
+                                class="w-12 h-12 bg-white text-black rounded-full flex items-center justify-center hover:scale-110 transition-transform active:scale-95 shadow-xl">
+                                <i data-lucide="play" id="icon-${token.id}" class="w-5 h-5 fill-current"></i>
+                            </button>
+                            <div class="text-[10px] font-mono text-white/20">#${token.token_hash.substring(0, 8)}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        async function togglePlay(id, params) {
+            if (!params.chords || params.chords.length === 0) {
+                alert("此燃料为早期版本，不含完整音轨数据。");
+                return;
+            }
+            if (currentPlayingId === id) {
+                stopMusic();
+                return;
+            }
+
+            if (currentPlayingId !== null) {
+                stopMusic();
+            }
+
+            await setupAudio();
+            currentPlayingId = id;
+            
+            // UI Update
+            const btn = document.getElementById(`btn-${id}`);
+            const icon = document.getElementById(`icon-${id}`);
+            const card = document.getElementById(`card-${id}`);
+            
+            btn.classList.replace('bg-white', 'bg-blue-500');
+            btn.classList.replace('text-black', 'text-white');
+            icon.setAttribute('data-lucide', 'square');
+            card.classList.add('energy-glow');
+            lucide.createIcons();
+
+            // Play Logic
+            const chords = params.chords;
+            const tempo = params.tempo || 70;
+            const genre = params.genre || 'ambient';
+            
+            // Set synth type based on genre
+            const synthType = genre === 'lo-fi' ? 'triangle' : (genre === 'cinematic' ? 'sawtooth' : 'sine');
+            pad.set({ oscillator: { type: synthType } });
+
+            Tone.Transport.stop();
+            Tone.Transport.cancel();
+            Tone.Transport.bpm.value = tempo;
+
+            let idx = 0;
+            const loop = new Tone.Loop(time => {
+                const chord = chords[idx % chords.length];
+                pad.triggerAttackRelease(chord, '1n', time);
+                
+                const note = chord[Math.floor(Math.random() * chord.length)];
+                synth.triggerAttackRelease(note, '4n', time + Tone.Time('4n').toSeconds());
+                
+                idx++;
+            }, '1n').start(0);
+
+            Tone.Transport.start();
+        }
+
+        function stopMusic() {
+            if (currentPlayingId === null) return;
+            
+            const id = currentPlayingId;
+            const btn = document.getElementById(`btn-${id}`);
+            const icon = document.getElementById(`icon-${id}`);
+            const card = document.getElementById(`card-${id}`);
+            
+            if (btn) {
+                btn.classList.replace('bg-blue-500', 'bg-white');
+                btn.classList.replace('text-white', 'text-black');
+                icon.setAttribute('data-lucide', 'play');
+            }
+            if (card) card.classList.remove('energy-glow');
+            
+            Tone.Transport.stop();
+            Tone.Transport.cancel();
+            currentPlayingId = null;
+            lucide.createIcons();
+        }
+
+        fetchVault();
+    </script>
+</body>
+</html>
