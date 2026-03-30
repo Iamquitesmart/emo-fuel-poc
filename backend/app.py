@@ -99,6 +99,10 @@ def index():
 def vault():
     return render_template('vault.html')
 
+@app.route('/diary')
+def diary():
+    return render_template('diary.html')
+
 # Global/Mock Regional Sentiment Data
 REGIONAL_SENTIMENT = {
     'Asia': {'happiness': 0.7, 'sadness': 0.2, 'energy': 0.8},
@@ -120,37 +124,38 @@ import requests
 # LLM Config (Optional: User can set GROQ_API_KEY in Vercel/Local)
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 
-def get_llm_response(user_text, round_num, context, chat_history=[]):
+def get_llm_response(user_text, round_num, context, chat_history=[], mode='experiment'):
     if not GROQ_API_KEY:
+        if mode == 'diary':
+            return f"在这段文字里，我听到了你内心的{context}。今晚的月色很美，希望这段回响能带给你一丝安宁。"
         return f"作为你的心理陪伴者，我能感受到你此刻的{context}。这第 {round_num} 轮的旋律中，我为你加入了一丝深沉的基调。你能再深入聊聊那个让你产生这种感觉的具体瞬间吗？"
     
     try:
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
         
-        # Build messages with history for context-awareness
-        messages = [
-            {
-                "role": "system", 
-                "content": (
-                    "你是一位融合了人本主义和存在主义流派的高级心理咨询师。你的语言风格：专业、温暖、充满洞察力、富有诗意且精炼。 "
-                    "你正在引导用户进行‘情绪燃料实验’。你的任务是通过对话： "
-                    "1. 展现极高的共情能力，精准捕捉用户言语背后的情感色彩。 "
-                    "2. 运用‘内容反应’和‘情感反应’技术，让用户感到被深度理解。 "
-                    "3. 语言要像深夜的耳语，含蓄而有力量，避免机械的套路话。 "
-                    "4. 必须记住之前的对话，保持逻辑连贯，像真正的心理医生一样引导用户觉察自我。 "
-                    "5. 每次回复严控在 60 字以内。"
-                )
-            }
-        ]
+        system_content = (
+            "你是一位融合了人本主义和存在主义流派的高级心理咨询师。你的语言风格：专业、温暖、充满洞察力、富有诗意且精炼。 "
+            "你的任务是通过对话： "
+            "1. 展现极高的共情能力，精准捕捉用户言语背后的情感色彩。 "
+            "2. 运用‘内容反应’和‘情感反应’技术，让用户感到被深度理解。 "
+            "3. 语言要像深夜的耳语，含蓄而有力量。 "
+            "4. 保持逻辑连贯。 "
+            "5. 每次回复严控在 60 字以内。"
+        )
+
+        if mode == 'diary':
+            user_prompt = f"用户写下了一篇深夜日记：‘{user_text}’。情绪背景：{context}。请以心理咨询师的身份，给出一个充满洞察力、温暖且能引发自我觉察的‘深夜回响’回复。"
+        else:
+            user_prompt = f"对话轮次：{round_num}/5。情绪背景：{context}。用户说：‘{user_text}’。请以心理咨询师的身份给出回应。"
+
+        messages = [{"role": "system", "content": system_content}]
         
-        # Add history (limit to last 4 turns)
         for turn in chat_history[-4:]:
             messages.append({"role": "user", "content": turn['user']})
             messages.append({"role": "assistant", "content": turn['ai']})
             
-        # Add current user input
-        messages.append({"role": "user", "content": f"对话轮次：{round_num}/5。情绪背景：{context}。用户说：‘{user_text}’。请以心理咨询师的身份给出回应。"})
+        messages.append({"role": "user", "content": user_prompt})
         
         data = {
             "model": "llama-3-8b-8192",
@@ -162,7 +167,7 @@ def get_llm_response(user_text, round_num, context, chat_history=[]):
         return res.json()['choices'][0]['message']['content']
     except Exception as e:
         print(f"LLM Error: {e}")
-        return f"我听到了。在这一轮的波动中，旋律变得更加宽广。请继续告诉我，那对你意味着什么？"
+        return "我听到了。在这一轮的波动中，旋律变得更加宽广。请继续告诉我，那对你意味着什么？"
 
 # Music Theory Mappings (P3: 7th and 9th chords)
 GENRES = {
@@ -185,6 +190,7 @@ def analyze_sentiment():
     round_num = data.get('round', 1)
     genre = data.get('genre', 'ambient')
     chat_history = data.get('history', [])
+    mode = data.get('mode', 'experiment')
     
     if not text:
         return jsonify({'error': 'No text provided'}), 400
@@ -201,12 +207,15 @@ def analyze_sentiment():
             break
 
     # Determine Mode and Scale
-    if context == 'anger' or polarity < -0.4: mode = 'intense'
-    elif context == 'missing' or context == 'family' or polarity < 0: mode = 'nostalgic'
-    elif context == 'joy' or polarity > 0.4: mode = 'bright'
-    else: mode = 'peaceful'
+    if context == 'anger' or polarity < -0.4: mood = 'intense'
+    elif context == 'missing' or context == 'family' or polarity < 0: mood = 'nostalgic'
+    elif context == 'joy' or polarity > 0.4: mood = 'bright'
+    else: mode_key = 'peaceful' # Renamed to avoid conflict with 'mode' param
 
-    scale = SCALES[mode]
+    scale = SCALES[mode_key if 'mode_key' in locals() else 'peaceful'] # Corrected
+    if context == 'anger' or polarity < -0.4: scale = SCALES['intense']
+    elif context == 'missing' or context == 'family' or polarity < 0: scale = SCALES['nostalgic']
+    elif context == 'joy' or polarity > 0.4: scale = SCALES['bright']
     
     # Chord Progression Logic: Progressive addition
     progression_indices = [0, 3, 4, 5, 3, 0, 1, 4]
@@ -224,28 +233,26 @@ def analyze_sentiment():
         chord = [root, third, fifth, seventh]
     else:
         chord = [root, third, fifth, seventh, ninth]
-
+    
     # Melody Generation Params (P2 Upgrade)
-    # Higher polarity = higher pitch notes, faster rhythm
-    # Higher subjectivity = more random/expressive note selection
     melody_params = {
         'root_index': base_idx,
-        'pitch_offset': int(polarity * 3), # Shift up/down based on mood
-        'rhythm_density': 0.3 + (abs(polarity) * 0.5), # More mood = more notes
-        'note_length': '4n' if abs(polarity) < 0.5 else '8n', # Fast notes for intense mood
-        'expressivity': subjectivity # Used for velocity randomness
+        'pitch_offset': int(polarity * 3),
+        'rhythm_density': 0.3 + (abs(polarity) * 0.5),
+        'note_length': '4n' if abs(polarity) < 0.5 else '8n',
+        'expressivity': subjectivity
     }
 
     music_params = {
         'tempo': GENRES[genre]['tempo'][0] + (polarity * 10),
         'new_chord': chord,
-        'mode': mode,
+        'mode': mode, # Keep for consistency but use mode_key for internal logic if needed
         'genre': genre,
         'energy_gain': abs(polarity) * 15 + 10,
         'melody': melody_params
     }
     
-    ai_response = get_llm_response(text, round_num, context, chat_history)
+    ai_response = get_llm_response(text, round_num, context, chat_history, mode=mode)
     
     return jsonify({
         'polarity': polarity,

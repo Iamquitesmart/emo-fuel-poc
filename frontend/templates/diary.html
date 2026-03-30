@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EMO.LAB - 深夜日记</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;700&family=Space+Grotesk:wght@300;500&display=swap');
+        
+        body {
+            font-family: 'Space Grotesk', 'Noto Serif SC', serif;
+            background: #050505;
+            color: #d1d1d1;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.02);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .diary-input {
+            background: transparent;
+            border: none;
+            outline: none;
+            width: 100%;
+            height: 60vh;
+            font-size: 1.25rem;
+            line-height: 1.8;
+            resize: none;
+            color: #eee;
+            caret-color: #3b82f6;
+            font-family: 'Noto Serif SC', serif;
+        }
+
+        .diary-input::placeholder {
+            color: rgba(255, 255, 255, 0.1);
+            font-style: italic;
+        }
+
+        /* Rain Canvas */
+        #rain-canvas {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: -1;
+            opacity: 0.15;
+        }
+
+        .fade-in {
+            animation: fadeIn 2s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .typing-glow {
+            text-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center p-8">
+    <canvas id="rain-canvas"></canvas>
+
+    <nav class="fixed top-0 left-0 w-full p-6 flex justify-between items-center z-50">
+        <div class="flex items-center gap-3">
+            <i data-lucide="moon" class="w-5 h-5 text-blue-400"></i>
+            <span class="text-sm font-bold tracking-widest uppercase opacity-40">EMO.LAB / DIARY</span>
+        </div>
+        <div class="flex items-center gap-4">
+            <div id="sound-status" class="text-[10px] uppercase tracking-widest text-white/20 flex items-center gap-2">
+                <span id="sound-text">音频已静音</span>
+                <button onclick="toggleAudio()" class="hover:text-white transition-colors">
+                    <i id="sound-icon" data-lucide="volume-x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <a href="/" class="glass px-6 py-2 rounded-full text-[10px] hover:bg-white hover:text-black transition-all flex items-center gap-2 uppercase tracking-widest">
+                <i data-lucide="arrow-left" class="w-3 h-3"></i>
+                返回实验室
+            </a>
+        </div>
+    </nav>
+
+    <main class="max-w-3xl w-full mt-20 fade-in">
+        <div class="mb-8">
+            <h1 class="text-sm text-white/20 uppercase tracking-[0.3em] mb-2" id="current-date">2026.03.30</h1>
+            <div class="h-px w-12 bg-blue-500/50"></div>
+        </div>
+
+        <textarea id="diary-textarea" class="diary-input" placeholder="今晚，想写点什么..." autofocus></textarea>
+
+        <div class="mt-12 flex justify-between items-center">
+            <div class="flex gap-4">
+                <button id="submit-btn" class="glass px-8 py-3 rounded-2xl text-sm hover:bg-white hover:text-black transition-all disabled:opacity-20 flex items-center gap-2">
+                    <i data-lucide="check" class="w-4 h-4"></i>
+                    完成日记
+                </button>
+                <button id="generate-music-btn" class="hidden glass px-8 py-3 rounded-2xl text-sm border-blue-500/30 text-blue-400 hover:bg-blue-500 hover:text-white transition-all flex items-center gap-2">
+                    <i data-lucide="music" class="w-4 h-4"></i>
+                    消耗 10 Token 生成今日旋律
+                </button>
+            </div>
+            <div id="word-count" class="text-[10px] text-white/10 uppercase tracking-widest">0 词</div>
+        </div>
+
+        <!-- AI Response Section -->
+        <div id="ai-feedback" class="hidden mt-12 p-8 glass rounded-[32px] border-l-4 border-blue-500/30">
+            <div class="text-[10px] text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <i data-lucide="sparkles" class="w-3 h-3"></i>
+                深夜回响
+            </div>
+            <p id="feedback-text" class="text-lg leading-relaxed italic text-white/70 font-serif">
+                <!-- AI feedback goes here -->
+            </p>
+        </div>
+    </main>
+
+    <script>
+        lucide.createIcons();
+
+        // Date Display
+        const date = new Date();
+        document.getElementById('current-date').innerText = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
+
+        // Audio Engine
+        let isAudioStarted = false;
+        let rainNoise, rainFilter;
+        let keyClickSynth, keyThudSynth;
+
+        async function initAudio() {
+            if (isAudioStarted) return;
+            await Tone.start();
+            
+            // 1. Rain Sound (Brown Noise + LPF)
+            rainFilter = new Tone.AutoFilter({
+                frequency: 0.1,
+                baseFrequency: 400,
+                octaves: 2
+            }).toDestination().start();
+            
+            rainNoise = new Tone.Noise("brown").connect(rainFilter);
+            rainNoise.volume.value = -30;
+            rainNoise.start();
+
+            // 2. Mechanical Keyboard Click (High-end)
+            keyClickSynth = new Tone.NoiseSynth({
+                noise: { type: "white" },
+                envelope: { attack: 0.001, decay: 0.05, sustain: 0 }
+            }).toDestination();
+            keyClickSynth.volume.value = -25;
+
+            // 3. Mechanical Keyboard Thud (Low-end)
+            keyThudSynth = new Tone.MembraneSynth({
+                pitchDecay: 0.001,
+                octaves: 1,
+                oscillator: { type: "sine" },
+                envelope: { attack: 0.001, decay: 0.1, sustain: 0 }
+            }).toDestination();
+            keyThudSynth.volume.value = -35;
+
+            isAudioStarted = true;
+            updateSoundUI();
+        }
+
+        function toggleAudio() {
+            if (!isAudioStarted) {
+                initAudio();
+            } else {
+                if (Tone.Destination.mute) {
+                    Tone.Destination.mute = false;
+                } else {
+                    Tone.Destination.mute = true;
+                }
+                updateSoundUI();
+            }
+        }
+
+        function updateSoundUI() {
+            const icon = document.getElementById('sound-icon');
+            const text = document.getElementById('sound-text');
+            const isMuted = Tone.Destination.mute || !isAudioStarted;
+            
+            icon.setAttribute('data-lucide', isMuted ? 'volume-x' : 'volume-2');
+            text.innerText = isMuted ? '音频已静音' : '沉浸式音效开启';
+            lucide.createIcons();
+        }
+
+        // Typing Interaction
+        const textarea = document.getElementById('diary-textarea');
+        textarea.addEventListener('keydown', (e) => {
+            if (!isAudioStarted || Tone.Destination.mute) return;
+
+            // Trigger mechanical sounds
+            keyClickSynth.triggerAttack();
+            keyThudSynth.triggerAttackRelease("C1", "16n");
+
+            // Visual feedback
+            textarea.classList.add('typing-glow');
+            setTimeout(() => textarea.classList.remove('typing-glow'), 50);
+        });
+
+        textarea.addEventListener('input', () => {
+            const words = textarea.value.trim().length;
+            document.getElementById('word-count').innerText = `${words} 字`;
+            document.getElementById('submit-btn').disabled = words < 10;
+        });
+
+        // Rain Animation
+        const canvas = document.getElementById('rain-canvas');
+        const ctx = canvas.getContext('2d');
+        let drops = [];
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Drop {
+            constructor() { this.reset(); }
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = -20;
+                this.speed = Math.random() * 4 + 4;
+                this.len = Math.random() * 15 + 10;
+            }
+            update() {
+                this.y += this.speed;
+                if (this.y > canvas.height) this.reset();
+            }
+            draw() {
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+                ctx.lineTo(this.x, this.y + this.len);
+                ctx.stroke();
+            }
+        }
+
+        for(let i=0; i<60; i++) drops.push(new Drop());
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drops.forEach(d => { d.update(); d.draw(); });
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        // Submission Logic
+        const submitBtn = document.getElementById('submit-btn');
+        const musicBtn = document.getElementById('generate-music-btn');
+        const feedbackSection = document.getElementById('ai-feedback');
+        const feedbackText = document.getElementById('feedback-text');
+
+        submitBtn.addEventListener('click', async () => {
+            const text = textarea.value.trim();
+            if (!text) return;
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> 正在聆听...';
+            lucide.createIcons();
+
+            try {
+                // Call the existing analyze API for sentiment and AI feedback
+                const res = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        text, 
+                        round: 1, 
+                        genre: 'ambient',
+                        history: [], 
+                        mode: 'diary'
+                    })
+                });
+                const data = await res.json();
+
+                // Show AI feedback
+                feedbackSection.classList.remove('hidden');
+                feedbackText.innerText = data.ai_response;
+                
+                // Transition buttons
+                submitBtn.classList.add('hidden');
+                musicBtn.classList.remove('hidden');
+
+                // Auto-save to vault/db
+                await fetch('/api/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        text: text,
+                        full_history: [text],
+                        total_energy: Math.abs(data.polarity * 100),
+                        summary: data.ai_response,
+                        music_params: data.music_params
+                    })
+                });
+
+            } catch (e) {
+                console.error(err);
+                submitBtn.innerHTML = '完成日记';
+            }
+        });
+
+        musicBtn.addEventListener('click', () => {
+            // Mock token spend and redirection
+            alert("支付验证中... 10 Token 已消耗。即将跳转至燃料库听取你的今日私享旋律。");
+            window.location.href = '/vault';
+        });
+
+    </script>
+</body>
+</html>
